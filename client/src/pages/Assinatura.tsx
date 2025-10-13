@@ -172,6 +172,38 @@ export default function AssinaturaPage() {
     },
   });
 
+  // Mutation: Cancelar assinatura
+  const cancelarAssinaturaMutation = useMutation({
+    mutationFn: async (assinaturaId: string) => {
+      const { data, error } = await supabase.rpc('cancelar_assinatura', {
+        p_assinatura_id: assinaturaId,
+      });
+
+      if (error) throw error;
+      if (data?.status === 'ERROR') throw new Error(data.message);
+
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/assinaturas'] });
+
+      toast({
+        title: 'Assinatura cancelada',
+        description: data?.message || 'Sua assinatura foi cancelada com sucesso.',
+      });
+
+      setModalCancelamento(false);
+      setAssinaturaParaCancelar(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro ao cancelar assinatura',
+        description: error.message || 'Não foi possível cancelar a assinatura. Tente novamente.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   // Função para validar dados antes de criar assinatura
   const handleSelectPlano = async (planoId: number, periodicidade: AssinaturaPeriodicidade) => {
     setModalPlanos(false);
@@ -214,19 +246,11 @@ export default function AssinaturaPage() {
     });
   };
 
-  // Função para cancelar assinatura (simulada - backend não implementado)
+  // Função para cancelar assinatura
   const handleCancelarAssinatura = async () => {
     if (!assinaturaParaCancelar) return;
 
-    toast({
-      title: 'Funcionalidade em desenvolvimento',
-      description:
-        'A função de cancelamento ainda não está disponível no backend. Em breve você poderá cancelar sua assinatura.',
-      variant: 'destructive',
-    });
-
-    setModalCancelamento(false);
-    setAssinaturaParaCancelar(null);
+    await cancelarAssinaturaMutation.mutateAsync(assinaturaParaCancelar.assinatura_id);
   };
 
   const assinaturas = assinaturasData?.data || [];
