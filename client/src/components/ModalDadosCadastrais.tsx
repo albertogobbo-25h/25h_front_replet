@@ -45,9 +45,18 @@ export default function ModalDadosCadastrais({
     email: '',
     whatsapp: '',
   });
+  const [userHasEdited, setUserHasEdited] = useState(false);
 
+  // Resetar estado de edição quando o modal abrir/fechar
   useEffect(() => {
-    if (dadosAtuais) {
+    if (open) {
+      setUserHasEdited(false);
+    }
+  }, [open]);
+
+  // Carregar dados do backend quando disponíveis (somente se usuário não editou)
+  useEffect(() => {
+    if (open && dadosAtuais && !userHasEdited) {
       setTipoPessoa(dadosAtuais.tipo_pessoa);
       
       // Formatar CPF/CNPJ e WhatsApp vindos do backend (apenas números)
@@ -64,7 +73,7 @@ export default function ModalDadosCadastrais({
         whatsapp: whatsappFormatado,
       });
     }
-  }, [dadosAtuais]);
+  }, [open, dadosAtuais, userHasEdited]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,12 +117,19 @@ export default function ModalDadosCadastrais({
   };
 
   const handleCpfCnpjChange = (value: string) => {
+    setUserHasEdited(true);
     const formatted = tipoPessoa === 'FISICA' ? formatCPF(value) : formatCNPJ(value);
     setFormData({ ...formData, cpf_cnpj: formatted });
   };
 
   const handleWhatsAppChange = (value: string) => {
+    setUserHasEdited(true);
     setFormData({ ...formData, whatsapp: formatWhatsApp(value) });
+  };
+
+  const handleFieldChange = (field: string, value: string) => {
+    setUserHasEdited(true);
+    setFormData({ ...formData, [field]: value });
   };
 
   const isFormValid = () => {
@@ -142,7 +158,10 @@ export default function ModalDadosCadastrais({
                 <Label htmlFor="tipo-pessoa">Tipo de Pessoa *</Label>
                 <Select
                   value={tipoPessoa}
-                  onValueChange={(value) => setTipoPessoa(value as TipoPessoa)}
+                  onValueChange={(value) => {
+                    setUserHasEdited(true);
+                    setTipoPessoa(value as TipoPessoa);
+                  }}
                 >
                   <SelectTrigger id="tipo-pessoa" data-testid="select-tipo-pessoa">
                     <SelectValue />
@@ -176,7 +195,7 @@ export default function ModalDadosCadastrais({
               <Input
                 id="nome"
                 value={formData.nome}
-                onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                onChange={(e) => handleFieldChange('nome', e.target.value)}
                 placeholder={tipoPessoa === 'FISICA' ? 'João da Silva' : 'Empresa LTDA'}
                 data-testid="input-nome"
                 required
@@ -189,7 +208,7 @@ export default function ModalDadosCadastrais({
                 <Input
                   id="nome-fantasia"
                   value={formData.nome_fantasia}
-                  onChange={(e) => setFormData({ ...formData, nome_fantasia: e.target.value })}
+                  onChange={(e) => handleFieldChange('nome_fantasia', e.target.value)}
                   placeholder="Nome comercial da empresa"
                   data-testid="input-nome-fantasia"
                 />
@@ -203,7 +222,7 @@ export default function ModalDadosCadastrais({
                   id="email"
                   type="email"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) => handleFieldChange('email', e.target.value)}
                   placeholder="seu@email.com"
                   data-testid="input-email-cadastral"
                   required
