@@ -1,0 +1,23 @@
+7. Detalhamento do Módulo: Gestão de Assinaturas
+Este módulo é essencial para a monetização do 25h, permitindo que o Assinante visualize seu plano atual, histórico de pagamentos e inicie processos de Upgrade, Renovação ou Cancelamento.
+
+7.1. Histórias de Usuário da Gestão de Assinatura
+ID	Módulo	História de Usuário (HU)	Critérios de Aceitação (CA)	Funções Backend Utilizadas
+HU.ASS.001	Visualização	Como Assinante, quero ver claramente qual é o meu Plano Atual e seu Status para entender meus limites e situação de pagamento.	A tela deve exibir o nome do plano (nomePlano), status (status), data de vencimento (dthrFim) e o detalhe do limite (ex: 5 Pix do Plano FREE).	public.listar_assinaturas(incluir_historico: false)
+HU.ASS.002	Histórico	Como Assinante, quero visualizar o histórico de todas as minhas assinaturas (ativas, suspensas, canceladas) para acompanhar minha trajetória na plataforma.	Deve haver uma seção ou toggle que liste todas as assinaturas passadas e presentes, incluindo o plano e a data de fim.	public.listar_assinaturas(incluir_historico: true)
+HU.ASS.003	Upgrade	Como Assinante, quero ter uma tela onde eu possa escolher um plano pago e iniciar o processo de contratação (Upgrade).	O sistema deve listar apenas planos com indGratuito = false. A seleção deve levar à tela de Pré-requisitos (dados cadastrais) e, em seguida, à criação da nova assinatura.	public.listar_planos_assinatura(false)
+HU.ASS.004	Dados Cadastrais	Como Assinante, preciso ser alertado e forçado a completar meus dados cadastrais (CNPJ/CPF, Nome, Email) antes de contratar um plano pago.	Ao tentar criar uma assinatura paga, o sistema deve verificar os dados com public.obter_dados_assinante(). Se incompleto, deve exibir um formulário modal para coletar os dados e chamar public.atualizar_dados_assinante() antes de prosseguir.	public.obter_dados_assinante(), public.atualizar_dados_assinante()
+HU.ASS.005	Nova Assinatura	Como Assinante, após escolher um plano pago, quero criar uma nova assinatura para que o sistema gere a primeira cobrança.	A criação deve ser acionada com public.criar_nova_assinatura(plano_id, periodicidade). O frontend deve receber o cobranca_id e redirecionar para o fluxo de pagamento.	public.criar_nova_assinatura()
+HU.ASS.006	Pagamento	Como Assinante, quero iniciar o pagamento de uma mensalidade pendente (primeiro pagamento ou renovação) para ativar meu plano.	O sistema deve chamar a Edge Function iniciar_pagto_assinante com o cobranca_id pendente e o meio_pagamento (ex: OPF_PIX_IMEDIATO). O retorno deve ser usado para redirecionar o usuário para a paymentUrl do Pluggy.	Edge Function iniciar_pagto_assinante
+HU.ASS.007	Acompanhamento	Como Assinante, após autorizar o pagamento no Pluggy, quero ser notificado no meu dashboard assim que o pagamento for confirmado e minha assinatura for ativada.	O frontend deve usar polling ou Supabase Realtime na tabela assinatura para detectar quando o status muda de AGUARDANDO_PAGAMENTO para ATIVA.	Polling ou Realtime
+HU.ASS.008	Cancelamento	Como Assinante, quero poder cancelar minha assinatura ativa a qualquer momento, mantendo o acesso até o fim do período já pago.	Deve haver um botão de Cancelar que chama uma função de backend (public.cancelar_assinatura). O status da assinatura deve mudar para CANCELAMENTO_SOLICITADO (se houver, ou a lógica de negócio definida para cancelamento) ou CANCELADA.	public.cancelar_assinatura (a ser criada)
+
+Exportar para as Planilhas
+7.2. Fluxo de Navegação (Módulo)
+A navegação deve seguir as condições de status da API listar_assinaturas.
+
+Status da Assinatura (Retorno API)	Tela/Ação no Frontend
+ATIVA	Tela Principal: Exibir detalhes do plano, limites e um botão de "Mudar Plano" (Upgrade) e "Cancelar Assinatura".
+AGUARDANDO_PAGAMENTO	Tela de Cobrança Pendente: Exibir o valor da cobrança e um botão de "Pagar Agora" (aciona HU.ASS.006).
+SUSPENSA	Tela de Renovação Obrigatória: Exibir aviso de suspensão e um botão de "Renovar/Pagar" (aciona HU.ASS.006 ou HU.ASS.003, dependendo da regra de negócio).
+CANCELADA / Nenhuma Ativa	Tela de Escolha de Plano: Exibir a lista de planos pagos e incentivar a nova contratação (aciona HU.ASS.003).
