@@ -6,13 +6,20 @@ Sistema SaaS de gestão de cobranças com PIX automático via Pluggy. Desenvolvi
 **Tagline**: "1 hora a mais no seu dia. Mais Dinheiro no Bolso."
 
 ## Status do Projeto
-**Fase Atual**: Protótipo Visual Funcional (Design-First)
+**Fase Atual**: Autenticação Completa + Protótipo Visual
 - ✅ UI/UX completo implementado
 - ✅ Componentes reutilizáveis criados
-- ✅ Navegação e fluxos de tela funcionais
+- ✅ Navegação SPA funcional (Wouter)
 - ✅ Dark mode implementado
 - ✅ Localização brasileira (R$, WhatsApp, datas)
-- 🔄 Backend pendente (próxima fase)
+- ✅ **Autenticação Supabase integrada**
+  - ✅ Login email/senha
+  - ✅ Signup email/senha
+  - ✅ Google OAuth (UI pronta)
+  - ✅ Onboarding com metadados
+  - ✅ Proteção de rotas
+  - ✅ Navegação sem page reload
+- 🔄 Backend CRUD pendente (próxima fase)
 
 ## Arquitetura
 
@@ -47,7 +54,8 @@ client/src/
 │   ├── Assinatura.tsx
 │   └── Perfil.tsx
 ├── contexts/           # React contexts
-│   └── ThemeContext.tsx
+│   ├── ThemeContext.tsx
+│   └── AuthContext.tsx  # Supabase Auth integration
 ├── lib/               # Utilitários e configurações
 │   ├── queryClient.ts
 │   ├── supabase.ts
@@ -61,11 +69,15 @@ server/
 
 ## Funcionalidades Implementadas (UI)
 
-### Autenticação
-- [x] Login com email/senha
-- [x] Signup com email/senha
-- [x] Login com Google (UI pronta)
+### Autenticação (✅ COMPLETA)
+- [x] Login com email/senha (Supabase Auth)
+- [x] Signup com email/senha (Supabase Auth)
+- [x] Login com Google OAuth (integrado)
 - [x] Onboarding com nome e WhatsApp
+- [x] Salvamento em user_metadata (Supabase)
+- [x] Session management com listeners
+- [x] Proteção de rotas via AuthContext
+- [x] Logout funcional
 
 ### Dashboard
 - [x] KPI cards (Faturamento, Clientes, Cobranças)
@@ -121,24 +133,51 @@ server/
 
 Ver `design_guidelines.md` para detalhes completos.
 
-## Dados Mock
+## Autenticação Real (Supabase)
 
-### Usuário Atual (Mock)
-```javascript
+### Fluxo de Autenticação
+1. **Signup**:
+   - Usuário preenche email/senha no Login.tsx
+   - `signUp()` cria conta no Supabase Auth
+   - AuthContext detecta user sem `onboarding_completed`
+   - Exibe OnboardingForm
+   - Salva nome e WhatsApp em `user.user_metadata`
+   - Marca `onboarding_completed = true`
+   - Redireciona para Dashboard
+
+2. **Login**:
+   - Usuário preenche email/senha
+   - `signInWithPassword()` autentica via Supabase
+   - AuthContext verifica `onboarding_completed`
+   - Se completo → Dashboard
+   - Se não → OnboardingForm
+
+3. **Google OAuth**:
+   - Botão "Continuar com Google" no Login
+   - `signInWithOAuth({ provider: 'google' })`
+   - Redireciona para OAuth flow do Google
+   - Retorna autenticado
+   - Verifica onboarding (igual fluxo normal)
+
+4. **Session Management**:
+   - `supabase.auth.getSession()` no mount
+   - Listener `onAuthStateChange()` detecta mudanças
+   - Session persiste via localStorage (Supabase)
+   - Logout: `signOut()` limpa session
+
+### Usuário Atual (Real)
+```typescript
+// Vem do Supabase User object
 {
-  id: '123e4567-e89b-12d3-a456-426614174000',
-  email: 'usuario@exemplo.com',
-  nome: 'João Silva',
-  whatsapp: '(11) 98765-4321',
-  assinante_id: '123e4567-e89b-12d3-a456-426614174001'
+  id: string; // UUID do Supabase
+  email: string;
+  user_metadata: {
+    nome?: string;
+    whatsapp?: string;
+    onboarding_completed?: boolean;
+  }
 }
 ```
-
-### Fluxo de Autenticação (Mock)
-1. Login → Define `isAuthenticated = true`
-2. Verifica `needsOnboarding = true`
-3. Onboarding → Coleta nome e WhatsApp
-4. Redireciona para Dashboard
 
 ### Admin Mode
 - Flag `isAdmin` no App.tsx controla visibilidade do menu admin
@@ -158,12 +197,20 @@ Ver `design_guidelines.md` para detalhes completos.
 
 ## Integrações Configuradas
 
-### Supabase
-- **Status**: Mock configurado
-- **Arquivo**: `client/src/lib/supabase.ts`
-- **Variáveis necessárias**:
-  - `VITE_SUPABASE_URL`
-  - `VITE_SUPABASE_ANON_KEY`
+### Supabase (✅ COMPLETA)
+- **Status**: Autenticação integrada e funcional
+- **Arquivos**:
+  - `client/src/lib/supabase.ts` - Cliente Supabase
+  - `client/src/contexts/AuthContext.tsx` - Context + hooks
+- **Variáveis configuradas**:
+  - ✅ `VITE_SUPABASE_URL`
+  - ✅ `VITE_SUPABASE_ANON_KEY`
+- **Funcionalidades**:
+  - ✅ Email/password auth
+  - ✅ Google OAuth
+  - ✅ Session persistence
+  - ✅ User metadata storage
+  - ✅ Auth state listeners
 
 ### Pluggy (Pendente)
 - Integração PIX automática
@@ -173,9 +220,10 @@ Ver `design_guidelines.md` para detalhes completos.
 ## Próximas Etapas
 
 ### Backend (Prioridade Alta)
+- [x] ~~Setup Supabase auth real~~ ✅ COMPLETO
 - [ ] Implementar schema do banco (baseado em SCHEMA_PRISMA)
-- [ ] Setup Supabase auth real
-- [ ] RPC `processar_pos_login`
+- [ ] Criar tabelas no Supabase (clientes, cobranças, assinantes)
+- [ ] RPC `processar_pos_login` (verificar/criar assinante)
 - [ ] APIs REST para CRUD de clientes
 - [ ] APIs REST para CRUD de cobranças
 
@@ -207,6 +255,12 @@ Ver `design_guidelines.md` para detalhes completos.
 - `attached_assets/SCHEMA_PRISMA_*.md`: Schema do banco de dados
 - `attached_assets/GUIA_FRONTEND_API_*.md`: Guia de integração frontend/backend
 
+### Autenticação
+- `client/src/contexts/AuthContext.tsx`: Context + hooks de autenticação
+- `client/src/lib/supabase.ts`: Cliente Supabase configurado
+- `client/src/pages/Login.tsx`: Página de login/signup
+- `client/src/components/OnboardingForm.tsx`: Coleta dados pós-signup
+
 ### Configuração
 - `tailwind.config.ts`: Configuração do Tailwind com cores do design system
 - `client/index.html`: Meta tags e fonts
@@ -214,6 +268,7 @@ Ver `design_guidelines.md` para detalhes completos.
 
 ### State Management
 - `client/src/lib/queryClient.ts`: TanStack Query setup
+- `client/src/contexts/ThemeContext.tsx`: Dark/light mode
 
 ## Notas de Desenvolvimento
 
@@ -266,4 +321,4 @@ npm run db:studio    # Abre Drizzle Studio
 ---
 
 **Última Atualização**: 13/10/2025
-**Versão**: 0.1.0 (Protótipo Visual)
+**Versão**: 0.2.0 (Autenticação Completa)
