@@ -103,3 +103,49 @@ await supabase.auth.updateUser({
 - ✅ Mantido salvamento de metadados para compatibilidade
 - ✅ Teste E2E validou criação automática do plano Free
 - ✅ Verificado que assinatura aparece como ATIVA na página Assinatura
+
+## Formatação de Dados Cadastrais
+
+### Problema Corrigido (2025-10-13)
+**Erro**: "value too long for type character varying(14)" ao salvar dados cadastrais.
+
+**Causa Raiz**:
+- CNPJ formatado: "23.054.120/0001-77" (18 caracteres) → Banco espera 14 caracteres
+- WhatsApp formatado: "(51) 99126-3303" (15 caracteres) → Banco espera 11 caracteres
+- ModalDadosCadastrais e OnboardingForm enviavam valores COM formatação
+
+**Solução Implementada**:
+
+1. **Funções de Unformat (masks.ts)**
+   ```typescript
+   // Remove formatação, deixa apenas números
+   export function unformatCPFCNPJ(value: string): string {
+     return value.replace(/\D/g, '');
+   }
+   
+   export function unformatWhatsApp(value: string): string {
+     return value.replace(/\D/g, '');
+   }
+   ```
+
+2. **ModalDadosCadastrais.tsx**
+   - **Submit**: Remove formatação antes de enviar ao backend
+   - **useEffect**: Formata valores ao carregar do backend para exibição
+   - Garante UX consistente: usuário vê valores formatados, backend recebe apenas números
+
+3. **OnboardingForm.tsx**
+   - Remove formatação do WhatsApp antes de enviar
+   - Consistência com ModalDadosCadastrais
+
+**Fluxo Completo**:
+1. Usuário digita com formatação visual (máscaras aplicadas no input)
+2. Ao salvar: remove formatação → envia apenas números ao backend
+3. Backend armazena apenas números (CPF: 11 chars, CNPJ: 14 chars, WhatsApp: 11 chars)
+4. Ao carregar: formata para exibição → usuário vê valores formatados
+5. Ciclo se repete sem erros
+
+**Teste E2E Validado**:
+- ✅ CNPJ e WhatsApp salvos sem erro "value too long"
+- ✅ Toast de sucesso exibido: "Dados atualizados"
+- ✅ Modal de pagamento abre corretamente
+- ✅ Valores exibidos formatados ao reabrir o modal
