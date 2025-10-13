@@ -4,20 +4,69 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
-interface LoginProps {
-  onLogin?: () => void;
-}
-
-export default function Login({ onLogin }: LoginProps) {
+export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignup, setIsSignup] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const { signIn, signUp, signInWithGoogle } = useAuth();
+  const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Auth submitted:', { email, password, isSignup });
-    onLogin?.();
+    setIsLoading(true);
+
+    try {
+      const { error } = isSignup 
+        ? await signUp(email, password)
+        : await signIn(email, password);
+
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Erro na autenticação",
+          description: error.message,
+        });
+      } else if (isSignup) {
+        toast({
+          title: "Conta criada!",
+          description: "Verifique seu email para confirmar a conta.",
+        });
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Ocorreu um erro inesperado.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    try {
+      const { error } = await signInWithGoogle();
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Erro no login",
+          description: error.message,
+        });
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Ocorreu um erro inesperado.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -61,10 +110,10 @@ export default function Login({ onLogin }: LoginProps) {
             <Button
               type="submit"
               className="w-full"
-              disabled={!email || !password}
+              disabled={!email || !password || isLoading}
               data-testid="button-submit-auth"
             >
-              {isSignup ? 'Criar Conta' : 'Entrar'}
+              {isLoading ? 'Aguarde...' : (isSignup ? 'Criar Conta' : 'Entrar')}
             </Button>
           </form>
 
@@ -80,7 +129,8 @@ export default function Login({ onLogin }: LoginProps) {
           <Button
             variant="outline"
             className="w-full"
-            onClick={() => console.log('Google auth clicked')}
+            onClick={handleGoogleLogin}
+            disabled={isLoading}
             data-testid="button-google-auth"
           >
             <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">

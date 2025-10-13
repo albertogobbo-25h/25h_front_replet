@@ -4,24 +4,58 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { formatWhatsApp } from "@/lib/masks";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
 
 interface OnboardingFormProps {
-  onSubmit?: (data: { nome: string; whatsapp: string }) => void;
+  onComplete?: () => void;
 }
 
-export default function OnboardingForm({ onSubmit }: OnboardingFormProps) {
+export default function OnboardingForm({ onComplete }: OnboardingFormProps) {
   const [nome, setNome] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const { user } = useAuth();
+  const { toast } = useToast();
 
   const handleWhatsAppChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatWhatsApp(e.target.value);
     setWhatsapp(formatted);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Onboarding submitted:', { nome, whatsapp });
-    onSubmit?.({ nome, whatsapp });
+    if (!user) return;
+
+    setIsLoading(true);
+    try {
+      // Atualizar metadados do usuário no Supabase Auth
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          nome,
+          whatsapp,
+          onboarding_completed: true,
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Perfil atualizado!",
+        description: "Suas informações foram salvas com sucesso.",
+      });
+
+      onComplete?.();
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao salvar",
+        description: error.message || "Ocorreu um erro inesperado.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -63,10 +97,10 @@ export default function OnboardingForm({ onSubmit }: OnboardingFormProps) {
             <Button
               type="submit"
               className="w-full"
-              disabled={!nome || !whatsapp}
+              disabled={!nome || !whatsapp || isLoading}
               data-testid="button-submit-onboarding"
             >
-              Continuar
+              {isLoading ? 'Salvando...' : 'Continuar'}
             </Button>
           </form>
         </CardContent>

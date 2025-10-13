@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 
 const assinanteItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
@@ -39,17 +40,24 @@ const adminItems = [
 
 interface AppSidebarProps {
   isAdmin?: boolean;
-  userName?: string;
-  userEmail?: string;
 }
 
-export default function AppSidebar({ isAdmin = false, userName = "Usuário", userEmail = "usuario@exemplo.com" }: AppSidebarProps) {
+export default function AppSidebar({ isAdmin = false }: AppSidebarProps) {
+  const { user, signOut } = useAuth();
+  
+  const userName = user?.user_metadata?.nome || user?.email?.split('@')[0] || 'Usuário';
+  const userEmail = user?.email || '';
+  
   const initials = userName
     .split(' ')
-    .map(n => n[0])
+    .map((n: string) => n[0])
     .join('')
     .toUpperCase()
     .slice(0, 2);
+
+  const handleLogout = async () => {
+    await signOut();
+  };
 
   return (
     <Sidebar>
@@ -110,7 +118,7 @@ export default function AppSidebar({ isAdmin = false, userName = "Usuário", use
         <Button
           variant="ghost"
           className="w-full justify-start"
-          onClick={() => console.log('Logout clicked')}
+          onClick={handleLogout}
           data-testid="button-logout"
         >
           <LogOut className="mr-2 h-4 w-4" />
