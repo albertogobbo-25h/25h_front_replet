@@ -104,7 +104,7 @@ export default function ModalEscolhaPlanos({
                           <Check className="h-4 w-4 text-primary" />
                           <span>Até {plano.limite_clientes_ativos} clientes ativos</span>
                         </div>
-                        {plano.features.map((feature, idx) => (
+                        {plano.features?.map((feature, idx) => (
                           <div key={idx} className="flex items-center gap-2 text-sm">
                             <Check className="h-4 w-4 text-primary" />
                             <span>{feature}</span>

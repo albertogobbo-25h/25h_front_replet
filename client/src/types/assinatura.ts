@@ -15,7 +15,7 @@ export interface Plano {
   valor_anual_com_desconto: number | null;
   limite_clientes_ativos: number;
   dias_degustacao: number;
-  features: string[];
+  features: string[] | null;
 }
 
 export interface CobrancaEmAberto {
