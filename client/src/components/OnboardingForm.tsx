@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { formatWhatsApp } from "@/lib/masks";
+import { formatWhatsApp, unformatWhatsApp } from "@/lib/masks";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -30,10 +30,13 @@ export default function OnboardingForm({ onComplete }: OnboardingFormProps) {
 
     setIsLoading(true);
     try {
+      // Remover formatação do WhatsApp antes de enviar
+      const whatsappSemFormatacao = unformatWhatsApp(whatsapp);
+
       // Chamar RPC para processar pós-login e criar assinatura gratuita
       const { data, error } = await supabase.rpc('processar_pos_login', {
         p_nome: nome,
-        p_whatsapp: whatsapp
+        p_whatsapp: whatsappSemFormatacao
       });
 
       if (error) throw error;
@@ -47,7 +50,7 @@ export default function OnboardingForm({ onComplete }: OnboardingFormProps) {
       await supabase.auth.updateUser({
         data: {
           nome,
-          whatsapp,
+          whatsapp: whatsappSemFormatacao,
           onboarding_completed: true,
         }
       });

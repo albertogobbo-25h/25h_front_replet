@@ -20,7 +20,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import type { DadosAssinante, TipoPessoa } from "@/types/assinatura";
-import { formatWhatsApp, formatCPF, formatCNPJ } from "@/lib/masks";
+import { formatWhatsApp, formatCPF, formatCNPJ, unformatWhatsApp, unformatCPFCNPJ } from "@/lib/masks";
 
 interface ModalDadosCadastraisProps {
   open: boolean;
@@ -49,12 +49,19 @@ export default function ModalDadosCadastrais({
   useEffect(() => {
     if (dadosAtuais) {
       setTipoPessoa(dadosAtuais.tipo_pessoa);
+      
+      // Formatar CPF/CNPJ e WhatsApp vindos do backend (apenas números)
+      const cpfCnpjFormatado = dadosAtuais.tipo_pessoa === 'FISICA' 
+        ? formatCPF(dadosAtuais.cpf_cnpj || '')
+        : formatCNPJ(dadosAtuais.cpf_cnpj || '');
+      const whatsappFormatado = formatWhatsApp(dadosAtuais.whatsapp || '');
+      
       setFormData({
         nome: dadosAtuais.nome || '',
         nome_fantasia: dadosAtuais.nome_fantasia || '',
-        cpf_cnpj: dadosAtuais.cpf_cnpj || '',
+        cpf_cnpj: cpfCnpjFormatado,
         email: dadosAtuais.email || '',
-        whatsapp: dadosAtuais.whatsapp || '',
+        whatsapp: whatsappFormatado,
       });
     }
   }, [dadosAtuais]);
@@ -64,13 +71,17 @@ export default function ModalDadosCadastrais({
     setLoading(true);
 
     try {
+      // Remover formatação antes de enviar ao backend
+      const cpfCnpjSemFormatacao = unformatCPFCNPJ(formData.cpf_cnpj);
+      const whatsappSemFormatacao = unformatWhatsApp(formData.whatsapp);
+
       const { data, error } = await supabase.rpc('atualizar_dados_assinante', {
         p_nome: formData.nome,
         p_nome_fantasia: formData.nome_fantasia || null,
-        p_cpf_cnpj: formData.cpf_cnpj,
+        p_cpf_cnpj: cpfCnpjSemFormatacao,
         p_tipo_pessoa: tipoPessoa,
         p_email: formData.email,
-        p_whatsapp: formData.whatsapp,
+        p_whatsapp: whatsappSemFormatacao,
       });
 
       if (error) throw error;
