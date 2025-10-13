@@ -23,6 +23,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { Link } from "wouter";
 
 const assinanteItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
@@ -56,7 +57,10 @@ export default function AppSidebar({ isAdmin = false }: AppSidebarProps) {
     .slice(0, 2);
 
   const handleLogout = async () => {
-    await signOut();
+    const { error } = await signOut();
+    if (error) {
+      console.error('Erro ao fazer logout:', error);
+    }
   };
 
   return (
@@ -74,10 +78,10 @@ export default function AppSidebar({ isAdmin = false }: AppSidebarProps) {
               {assinanteItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
-                    <a href={item.url} data-testid={`link-${item.title.toLowerCase()}`}>
+                    <Link href={item.url} data-testid={`link-${item.title.toLowerCase()}`}>
                       <item.icon />
                       <span>{item.title}</span>
-                    </a>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -93,10 +97,10 @@ export default function AppSidebar({ isAdmin = false }: AppSidebarProps) {
                 {adminItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild>
-                      <a href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                      <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
                         <item.icon />
                         <span>{item.title}</span>
-                      </a>
+                      </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
