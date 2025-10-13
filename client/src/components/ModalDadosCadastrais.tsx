@@ -146,7 +146,7 @@ export default function ModalDadosCadastrais({
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="cnpj">CNPJ *</Label>
+                <Label htmlFor="cnpj" data-testid="label-cnpj">CNPJ *</Label>
                 <Input
                   id="cnpj"
                   value={formData.cpf_cnpj}
@@ -158,7 +158,7 @@ export default function ModalDadosCadastrais({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="whatsapp">WhatsApp *</Label>
+                <Label htmlFor="whatsapp" data-testid="label-whatsapp">WhatsApp *</Label>
                 <Input
                   id="whatsapp"
                   value={formData.whatsapp}
@@ -171,7 +171,7 @@ export default function ModalDadosCadastrais({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="nome">Razão Social *</Label>
+              <Label htmlFor="nome" data-testid="label-razao-social">Razão Social *</Label>
               <Input
                 id="nome"
                 value={formData.nome}
@@ -183,7 +183,7 @@ export default function ModalDadosCadastrais({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="nome-fantasia">Nome Fantasia</Label>
+              <Label htmlFor="nome-fantasia" data-testid="label-nome-fantasia">Nome Fantasia</Label>
               <Input
                 id="nome-fantasia"
                 value={formData.nome_fantasia}
@@ -194,7 +194,7 @@ export default function ModalDadosCadastrais({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email *</Label>
+              <Label htmlFor="email" data-testid="label-email">Email *</Label>
               <Input
                 id="email"
                 type="email"
