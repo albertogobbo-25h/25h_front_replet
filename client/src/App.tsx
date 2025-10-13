@@ -1,0 +1,84 @@
+import { useState } from "react";
+import { Switch, Route } from "wouter";
+import { queryClient } from "./lib/queryClient";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { ThemeProvider } from "@/contexts/ThemeContext";
+import ThemeToggle from "@/components/ThemeToggle";
+import AppSidebar from "@/components/AppSidebar";
+import OnboardingForm from "@/components/OnboardingForm";
+import Login from "@/pages/Login";
+import Dashboard from "@/pages/Dashboard";
+import Clientes from "@/pages/Clientes";
+import Cobrancas from "@/pages/Cobrancas";
+import Assinatura from "@/pages/Assinatura";
+import Perfil from "@/pages/Perfil";
+import NotFound from "@/pages/not-found";
+
+function Router() {
+  // TODO: Remove mock authentication state
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [isAdmin] = useState(true); // Mock admin status
+
+  if (!isAuthenticated) {
+    return <Login onLogin={() => {
+      setIsAuthenticated(true);
+      setNeedsOnboarding(true);
+    }} />;
+  }
+
+  if (needsOnboarding) {
+    return <OnboardingForm onSubmit={() => setNeedsOnboarding(false)} />;
+  }
+
+  const sidebarStyle = {
+    "--sidebar-width": "16rem",
+  };
+
+  return (
+    <SidebarProvider style={sidebarStyle as React.CSSProperties}>
+      <div className="flex h-screen w-full">
+        <AppSidebar 
+          isAdmin={isAdmin} 
+          userName="João Silva" 
+          userEmail="joao@exemplo.com" 
+        />
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <header className="flex items-center justify-between p-4 border-b">
+            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <ThemeToggle />
+          </header>
+          <main className="flex-1 overflow-auto p-8">
+            <Switch>
+              <Route path="/" component={Dashboard} />
+              <Route path="/dashboard" component={Dashboard} />
+              <Route path="/clientes" component={Clientes} />
+              <Route path="/cobrancas" component={Cobrancas} />
+              <Route path="/assinatura" component={Assinatura} />
+              <Route path="/perfil" component={Perfil} />
+              <Route component={NotFound} />
+            </Switch>
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
+  );
+}
+
+export default App;
