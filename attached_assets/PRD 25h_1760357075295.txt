@@ -1,0 +1,125 @@
+📝 Product Requirements Document (PRD) - Sistema 25h
+1. Introdução
+1.1. Propósito
+Este documento detalha os requisitos e especificações para o desenvolvimento do Sistema 25h (Frontend em NEXT.JS), alinhando as necessidades de negócio com o backend implementado no Supabase (Schema Prisma e Funções RPC/Edge Functions).
+
+1.2. Foco da Implementação (Sprint Zero)
+O foco desta fase é a área logada do Assinante e a Gestão de Assinatura (Onboarding, Upgrade, Pagamento), conforme as APIs definidas.
+
+2. Visão Geral do Produto e Dores Resolvidas
+2.1. Usuários
+Assinante (Empresa): Usuário logado que gerencia cobranças.
+
+Administrador 25h: Usuário interno proprietário do sistema 25h (painel administrativo).
+
+2.2. Dores Resolvidas (Valor para o Assinante)
+Dor Atual	Solução 25h	Benefício Central
+Falta de Tempo	Automação do ciclo de cobrança via Pix Automático.	+1 Hora no seu dia.
+Inadimplência/Atrito	Cobrança sem fricção via Pix Automático (1 clique).	Maior taxa de sucesso no pagamento.
+Complexidade/Taxas	Conciliação automática e taxas fixas, pagas apenas na liquidação.	Mais Dinheiro no Bolso.
+
+3. Requisitos da Experiência (UX) - Frontend
+3.1. Módulos do Assinante (NEXT.JS)
+Todos os dados serão acessados através das tabelas do schema app_data, filtrados pelo assinante_id via RLS.
+
+3.1.1. Dashboard
+Visão Geral: Informações sumarizadas (baseadas em ClienteCobranca e Cliente).
+
+KPIs de Cobrança: Quantidade e Valor de cobranças Geradas (Mês e Ano).
+
+Faturamento: Faturamento Mensal e Anual.
+
+Clientes: Contagem de Clientes Ativos (indAtivo = true em Cliente) e Inativos.
+
+3.1.2. Clientes
+Modelo de Dados: app_data.cliente
+
+Cadastrar/Editar Cliente: Campos: nome, whatsapp, indAtivo (default true).
+
+Inativar Cliente: Atualizar o campo indAtivo para false (Exclusão Lógica).
+
+Lista de Clientes:
+
+Filtros: Nome (Autocomplete), Situação (Ativo/Inativo), Código Cliente (a ser implementado).
+
+3.1.3. Cobranças
+Modelo de Dados: app_data.cliente_cobranca
+
+Funcionalidades:
+
+Gestão de Cobranças: CRUD (Criar, Editar, Excluir).
+
+Status de Pagamento: Atualizar statusPagamento (e dthrPagamento se pago manualmente).
+
+Lista de Cobranças:
+
+Filtros (Baseado em StatusCobranca enum): Cliente (Autocomplete), Situação Cobrança (EM_ABERTO, PAGO, CANCELADO, FALHOU), Período (Mês Atual; Últimos 3/6/12 Meses).
+
+3.2. Gestão de Conta e Assinatura
+3.2.1. Perfil do Assinante (Cadastro)
+Modelo de Dados: app_data.assinante
+
+Funcionalidade: Chamar public.atualizar_dados_assinante para salvar dados essenciais, especialmente os requeridos para pagamento de planos (e futura geração de Pix): nome, email, cpfCnpj, tipoPessoa, whatsapp.
+
+Visualização: Chamar public.obter_dados_assinante.
+
+3.2.2. Gestão de Planos
+Modelo de Dados: app_data.cfg_planos_assinatura
+
+Funcionalidade: Listar planos disponíveis (pagos) usando public.listar_planos_assinatura(p_incluir_gratuito: false).
+
+Transição de Plano: Chamar public.criar_nova_assinatura para iniciar upgrade/renovação.
+
+4. Requisitos do Painel Administrativo (NEXT.JS)
+O acesso é restrito aos usuários com a funcao = ADMIN.
+
+4.1. Dashboard Administrativo
+Visão Global: KPIs de Assinantes Ativos/Inativos, e visão consolidada de todas as cobranças.
+
+4.2. Assinantes (Gerenciamento)
+Modelo de Dados: app_data.assinante e app_data.usuario
+
+Funcionalidades: CRUD de Assinantes. Inativar (Exclusão Lógica) e Edição.
+
+Requisito: Assinantes devem ter cpfCnpj preenchido (CNPJ é obrigatório para empresas).
+
+Associação de Plano: Associar, Fazer Upgrade e Downgrade (manipulando app_data.assinatura).
+
+4.3. Planos (Configuração)
+Modelo de Dados: app_data.cfg_planos_assinatura
+
+Funcionalidades: CRUD de planos.
+
+Regra Plano FREE: indGratuito = true, valorMensal = 0, limiteClientesAtivos = 5 (usando limiteClientesAtivos como limite de Pix).
+
+5. Detalhamento do Fluxo de Onboarding do Assinante (Baseado na API)
+O fluxo é conduzido pela função public.processar_pos_login.
+
+5.1. Etapa 1: Autenticação e Verificação Inicial
+Ação do Frontend	Chamada Backend (Supabase)	Tratamento no Frontend
+Login/Signup	Supabase Auth (Email/Senha ou Google)	Obtém o JWT Token.
+Pós-Login	public.processar_pos_login()	Verifica o status da resposta: OK, ERROR, ou SEM ASSINATURA.
+Erro de Dados Faltantes	Retorno status: ERROR, code: USER_NOT_FOUND_MISSING_DATA	EXIBIR FORMULÁRIO: Coletar nome e whatsapp. Chamar processar_pos_login(nome, whatsapp) novamente.
+Criação Automática	(Backend faz) Cria assinante, usuario (com funções ADMIN e PROFISSIONAL), e assinatura gratuita (ind_gratuito: true).	Assinante é direcionado para o Dashboard com a assinatura ATIVA.
+
+Exportar para as Planilhas
+5.2. Etapa 2: Redirecionamento e Tratamento da Assinatura
+O frontend deve inspecionar o assinatura.status retornado por processar_pos_login.
+
+Status Retornado	Ação Requerida do Frontend
+OK + ATIVA	Redirecionar para Dashboard. (Isso ocorrerá se for Plano FREE recém-criado ou Pago ativo).
+OK + AGUARDANDO_PAGAMENTO	Tela de Pagamento Pendente. Exibir dados da cobrança em aberto e link de pagamento (linkPagamento em AssinaturaCobranca).
+OK + SUSPENSA	Tela de Renovação. Sugerir upgrade ou reativação do plano.
+OK + CANCELADA ou SEM ASSINATURA	Tela de Escolha de Plano. Chamar public.listar_planos_assinatura(false).
+
+Exportar para as Planilhas
+5.3. Etapa 3: Upgrade de Plano (Pagamento)
+Este fluxo é obrigatório quando o usuário decide sair do Plano FREE ou renovar um plano expirado.
+
+Ação	Chamada Backend	Requisito/Observação
+1. Escolha do Plano	public.listar_planos_assinatura(false)	Usuário escolhe planoId e periodicidade.
+2. Atualização Cadastral	public.obter_dados_assinante seguido por public.atualizar_dados_assinante	OBRIGATÓRIO: O backend pode retornar erro INCOMPLETE_DATA se faltarem nome, cpfCnpj, tipoPessoa ou email antes de criar a assinatura paga.
+3. Criação da Assinatura	public.criar_nova_assinatura(p_plano_id, p_periodicidade)	Retorna o cobranca_id. O status da nova assinatura será AGUARDANDO_PAGAMENTO.
+4. Início do Pagamento	Edge Function iniciar_pagto_assinante(cobranca_id, meio_pagamento)	meio_pagamento pode ser OPF_PIX_AUTOMATICO ou OPF_PIX_IMEDIATO. Retorna a paymentUrl do Gateway (Pluggy).
+5. Redirecionamento	window.open(paymentUrl)	Redirecionar o cliente para o link de pagamento do Gateway.
+6. Confirmação	Polling com public.listar_assinaturas ou Supabase Realtime	Esperar que o status da assinatura mude para ATIVA (Webhooks do Gateway farão a atualização automática no backend)
