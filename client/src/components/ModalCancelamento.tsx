@@ -18,6 +18,7 @@ interface ModalCancelamentoProps {
   onClose: () => void;
   assinatura: Assinatura;
   onConfirmar: () => Promise<void>;
+  isLoading?: boolean;
 }
 
 export default function ModalCancelamento({
@@ -25,16 +26,18 @@ export default function ModalCancelamento({
   onClose,
   assinatura,
   onConfirmar,
+  isLoading = false,
 }: ModalCancelamentoProps) {
-  const [loading, setLoading] = useState(false);
+  const [internalLoading, setInternalLoading] = useState(false);
+  
+  const loading = isLoading || internalLoading;
 
   const handleConfirmar = async () => {
-    setLoading(true);
+    setInternalLoading(true);
     try {
       await onConfirmar();
-      onClose();
     } finally {
-      setLoading(false);
+      setInternalLoading(false);
     }
   };
 

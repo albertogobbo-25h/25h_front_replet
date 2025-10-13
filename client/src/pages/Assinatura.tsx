@@ -327,7 +327,10 @@ export default function AssinaturaPage() {
                     Mudar Plano
                   </Button>
                   <Button
-                    onClick={() => setAssinaturaParaCancelar(assinaturaAtiva)}
+                    onClick={() => {
+                      setAssinaturaParaCancelar(assinaturaAtiva);
+                      setModalCancelamento(true);
+                    }}
                     variant="destructive"
                     data-testid="button-cancelar-ativa"
                   >
@@ -371,7 +374,10 @@ export default function AssinaturaPage() {
                     </Button>
                   )}
                   <Button
-                    onClick={() => setAssinaturaParaCancelar(assinaturaPendente)}
+                    onClick={() => {
+                      setAssinaturaParaCancelar(assinaturaPendente);
+                      setModalCancelamento(true);
+                    }}
                     variant="outline"
                     size="sm"
                     data-testid="button-cancelar-pendente"
@@ -498,6 +504,7 @@ export default function AssinaturaPage() {
           }}
           assinatura={assinaturaParaCancelar}
           onConfirmar={handleCancelarAssinatura}
+          isLoading={cancelarAssinaturaMutation.isPending}
         />
       )}
     </div>
