@@ -10,17 +10,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
-import type { DadosAssinante, TipoPessoa } from "@/types/assinatura";
-import { formatWhatsApp, formatCPF, formatCNPJ, unformatWhatsApp, unformatCPFCNPJ } from "@/lib/masks";
+import type { DadosAssinante } from "@/types/assinatura";
+import { formatWhatsApp, formatCNPJ, unformatWhatsApp, unformatCPFCNPJ } from "@/lib/masks";
 
 interface ModalDadosCadastraisProps {
   open: boolean;
@@ -37,7 +30,6 @@ export default function ModalDadosCadastrais({
 }: ModalDadosCadastraisProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [tipoPessoa, setTipoPessoa] = useState<TipoPessoa>('FISICA');
   const [formData, setFormData] = useState({
     nome: '',
     nome_fantasia: '',
@@ -46,6 +38,9 @@ export default function ModalDadosCadastrais({
     whatsapp: '',
   });
   const [userHasEdited, setUserHasEdited] = useState(false);
+
+  // Todos os assinantes são Pessoa Jurídica
+  const tipoPessoa = 'JURIDICA';
 
   // Resetar estado de edição quando o modal abrir/fechar
   useEffect(() => {
@@ -57,18 +52,14 @@ export default function ModalDadosCadastrais({
   // Carregar dados do backend quando disponíveis (somente se usuário não editou)
   useEffect(() => {
     if (open && dadosAtuais && !userHasEdited) {
-      setTipoPessoa(dadosAtuais.tipo_pessoa);
-      
-      // Formatar CPF/CNPJ e WhatsApp vindos do backend (apenas números)
-      const cpfCnpjFormatado = dadosAtuais.tipo_pessoa === 'FISICA' 
-        ? formatCPF(dadosAtuais.cpf_cnpj || '')
-        : formatCNPJ(dadosAtuais.cpf_cnpj || '');
+      // Formatar CNPJ e WhatsApp vindos do backend (apenas números)
+      const cnpjFormatado = formatCNPJ(dadosAtuais.cpf_cnpj || '');
       const whatsappFormatado = formatWhatsApp(dadosAtuais.whatsapp || '');
       
       setFormData({
         nome: dadosAtuais.nome || '',
         nome_fantasia: dadosAtuais.nome_fantasia || '',
-        cpf_cnpj: cpfCnpjFormatado,
+        cpf_cnpj: cnpjFormatado,
         email: dadosAtuais.email || '',
         whatsapp: whatsappFormatado,
       });
@@ -116,9 +107,9 @@ export default function ModalDadosCadastrais({
     }
   };
 
-  const handleCpfCnpjChange = (value: string) => {
+  const handleCnpjChange = (value: string) => {
     setUserHasEdited(true);
-    const formatted = tipoPessoa === 'FISICA' ? formatCPF(value) : formatCNPJ(value);
+    const formatted = formatCNPJ(value);
     setFormData({ ...formData, cpf_cnpj: formatted });
   };
 
@@ -155,76 +146,13 @@ export default function ModalDadosCadastrais({
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="tipo-pessoa">Tipo de Pessoa *</Label>
-                <Select
-                  value={tipoPessoa}
-                  onValueChange={(value) => {
-                    setUserHasEdited(true);
-                    setTipoPessoa(value as TipoPessoa);
-                  }}
-                >
-                  <SelectTrigger id="tipo-pessoa" data-testid="select-tipo-pessoa">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="FISICA">Pessoa Física</SelectItem>
-                    <SelectItem value="JURIDICA">Pessoa Jurídica</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="cpf-cnpj">
-                  {tipoPessoa === 'FISICA' ? 'CPF' : 'CNPJ'} *
-                </Label>
+                <Label htmlFor="cnpj">CNPJ *</Label>
                 <Input
-                  id="cpf-cnpj"
+                  id="cnpj"
                   value={formData.cpf_cnpj}
-                  onChange={(e) => handleCpfCnpjChange(e.target.value)}
-                  placeholder={tipoPessoa === 'FISICA' ? '000.000.000-00' : '00.000.000/0000-00'}
-                  data-testid="input-cpf-cnpj"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="nome">
-                {tipoPessoa === 'FISICA' ? 'Nome Completo' : 'Razão Social'} *
-              </Label>
-              <Input
-                id="nome"
-                value={formData.nome}
-                onChange={(e) => handleFieldChange('nome', e.target.value)}
-                placeholder={tipoPessoa === 'FISICA' ? 'João da Silva' : 'Empresa LTDA'}
-                data-testid="input-nome"
-                required
-              />
-            </div>
-
-            {tipoPessoa === 'JURIDICA' && (
-              <div className="space-y-2">
-                <Label htmlFor="nome-fantasia">Nome Fantasia</Label>
-                <Input
-                  id="nome-fantasia"
-                  value={formData.nome_fantasia}
-                  onChange={(e) => handleFieldChange('nome_fantasia', e.target.value)}
-                  placeholder="Nome comercial da empresa"
-                  data-testid="input-nome-fantasia"
-                />
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => handleFieldChange('email', e.target.value)}
-                  placeholder="seu@email.com"
-                  data-testid="input-email-cadastral"
+                  onChange={(e) => handleCnpjChange(e.target.value)}
+                  placeholder="00.000.000/0000-00"
+                  data-testid="input-cnpj"
                   required
                 />
               </div>
@@ -240,6 +168,42 @@ export default function ModalDadosCadastrais({
                   required
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="nome">Razão Social *</Label>
+              <Input
+                id="nome"
+                value={formData.nome}
+                onChange={(e) => handleFieldChange('nome', e.target.value)}
+                placeholder="Empresa LTDA"
+                data-testid="input-nome"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="nome-fantasia">Nome Fantasia</Label>
+              <Input
+                id="nome-fantasia"
+                value={formData.nome_fantasia}
+                onChange={(e) => handleFieldChange('nome_fantasia', e.target.value)}
+                placeholder="Nome comercial da empresa"
+                data-testid="input-nome-fantasia"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email">Email *</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => handleFieldChange('email', e.target.value)}
+                placeholder="seu@email.com"
+                data-testid="input-email-cadastral"
+                required
+              />
             </div>
           </div>
 
