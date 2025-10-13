@@ -30,8 +30,21 @@ export default function OnboardingForm({ onComplete }: OnboardingFormProps) {
 
     setIsLoading(true);
     try {
+      // Chamar RPC para processar pós-login e criar assinatura gratuita
+      const { data, error } = await supabase.rpc('processar_pos_login', {
+        p_nome: nome,
+        p_whatsapp: whatsapp
+      });
+
+      if (error) throw error;
+
+      // Verificar resposta
+      if (data.status === 'ERROR') {
+        throw new Error(data.message || 'Erro ao processar cadastro');
+      }
+
       // Atualizar metadados do usuário no Supabase Auth
-      const { error } = await supabase.auth.updateUser({
+      await supabase.auth.updateUser({
         data: {
           nome,
           whatsapp,
@@ -39,11 +52,9 @@ export default function OnboardingForm({ onComplete }: OnboardingFormProps) {
         }
       });
 
-      if (error) throw error;
-
       toast({
-        title: "Perfil atualizado!",
-        description: "Suas informações foram salvas com sucesso.",
+        title: "Bem-vindo ao 25h!",
+        description: "Sua conta foi criada com o plano Free.",
       });
 
       onComplete?.();
