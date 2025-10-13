@@ -24,7 +24,7 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 - **Testing**: `data-testid` attributes are extensively used for E2E testing with Playwright.
 
 ### Feature Specifications
-- **Authentication**: Login/Signup (email/password, Google OAuth), onboarding with name and WhatsApp, session management, route protection.
+- **Authentication**: Login/Signup (email/password, Google OAuth), onboarding with name and WhatsApp, **automatic Free plan creation on signup**, session management, route protection.
 - **Dashboard**: KPI cards (revenue, clients, charges), recent charges table, trend indicators.
 - **Client Management**: List clients with filters, table with actions (edit, delete), WhatsApp formatting.
 - **Charge Management**: List charges with filters (status, period), totals cards, status badges, view/send actions.
@@ -38,3 +38,68 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 - **TanStack Query**: Data fetching and state management.
 - **shadcn/ui**: UI component library.
 - **Tailwind CSS**: Utility-first CSS framework.
+
+## Onboarding e Criação Automática do Plano Free
+
+### Fluxo de Onboarding (✅ CORRIGIDO)
+Quando um novo usuário se cadastra no sistema, o seguinte fluxo acontece automaticamente:
+
+1. **Signup via Supabase Auth**
+   - Usuário fornece email e senha
+   - Supabase Auth cria a conta
+
+2. **Onboarding Form**
+   - Formulário coleta: Nome Completo e WhatsApp
+   - Frontend chama RPC: `processar_pos_login(p_nome, p_whatsapp)`
+
+3. **Backend (RPC `processar_pos_login`)**
+   - ✅ Cria registro na tabela `assinantes`
+   - ✅ Cria registro na tabela `usuarios` vinculado ao assinante
+   - ✅ Atribui funções ADMIN e PROFISSIONAL ao usuário
+   - ✅ **Busca plano gratuito ativo** (ind_gratuito = true)
+   - ✅ **Cria assinatura com status ATIVA**
+   - ✅ Define validade = hoje + dias_degustacao do plano
+   - ✅ Retorna dados completos (usuário, assinante, assinatura)
+
+4. **Confirmação no Frontend**
+   - Atualiza metadados do Supabase Auth (nome, whatsapp, onboarding_completed)
+   - Exibe toast: "Bem-vindo ao 25h! Sua conta foi criada com o plano Free."
+   - Redireciona para Dashboard
+
+### Plano Free (Gratuito)
+- **Título**: "Grátis" ou "Free"
+- **ind_gratuito**: true
+- **valor_mensal**: 0
+- **limite_clientes_ativos**: 5 (conforme PRD)
+- **Status inicial**: ATIVA
+- **Periodicidade**: MENSAL
+- **Degustação**: Geralmente 7 dias (configurável no plano)
+
+### Componente: OnboardingForm.tsx
+```typescript
+// Chama RPC para criar assinatura gratuita
+const { data, error } = await supabase.rpc('processar_pos_login', {
+  p_nome: nome,
+  p_whatsapp: whatsapp
+});
+
+if (data.status === 'ERROR') {
+  throw new Error(data.message);
+}
+
+// Atualiza metadados do Auth
+await supabase.auth.updateUser({
+  data: { nome, whatsapp, onboarding_completed: true }
+});
+```
+
+### Correção Aplicada (2025-10-13)
+**Problema**: Ao criar conta, nenhuma assinatura era atribuída ao usuário (bug reportado).
+
+**Causa**: OnboardingForm apenas salvava metadados no Supabase Auth, sem chamar `processar_pos_login`.
+
+**Solução**: 
+- ✅ Adicionado chamada à RPC `processar_pos_login` no OnboardingForm
+- ✅ Mantido salvamento de metadados para compatibilidade
+- ✅ Teste E2E validou criação automática do plano Free
+- ✅ Verificado que assinatura aparece como ATIVA na página Assinatura
