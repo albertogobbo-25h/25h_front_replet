@@ -25,7 +25,7 @@ export default function Login({ onLogin }: LoginProps) {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="text-4xl font-bold text-primary mb-4">25h</div>
-          <CardTitle>{isSignup ? 'Criar Conta' : 'Bem-vindo de volta'}</CardTitle>
+          <CardTitle>{isSignup ? 'Criar Conta' : '1 hora a mais no seu dia'}</CardTitle>
           <CardDescription>
             {isSignup 
               ? 'Crie sua conta para começar a gerenciar suas cobranças' 

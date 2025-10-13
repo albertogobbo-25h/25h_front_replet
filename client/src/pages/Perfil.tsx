@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatWhatsApp } from "@/lib/masks";
 
 export default function Perfil() {
   // TODO: Remove mock data
@@ -28,7 +29,11 @@ export default function Perfil() {
   };
 
   const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    if (field === 'whatsapp') {
+      setFormData(prev => ({ ...prev, [field]: formatWhatsApp(value) }));
+    } else {
+      setFormData(prev => ({ ...prev, [field]: value }));
+    }
   };
 
   return (

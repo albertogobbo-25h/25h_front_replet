@@ -1,199 +1,179 @@
-# Design Guidelines - Sistema 25h.com.br
+# Design Guidelines - Sistema 25h
 
-## Design Approach
+## Visão Geral
+Sistema de gestão de cobranças com PIX automático, focado em profissionais autônomos e pequenas empresas. O design segue princípios de Material Design adaptados para uma aplicação B2B SaaS de gestão financeira.
 
-**Selected Approach**: Design System-Based (Material Design principles with SaaS refinements)
-**Rationale**: Financial/billing management system requiring clarity, trust, and efficiency. Information-dense dashboards and tables benefit from established patterns and strong visual hierarchy.
+## Identidade Visual
 
-## Core Design Principles
+### Logo
+- **Marca**: "25h" em branco sobre fundo escuro
+- **Conceito**: +1 hora no dia, representando economia de tempo
+- **Tagline**: "Mais Dinheiro no Bolso"
 
-1. **Clarity First**: Financial data must be immediately scannable
-2. **Trust & Professionalism**: Clean, modern aesthetic for B2B SaaS
-3. **Brazilian Market Fit**: Portuguese language, Pix payment prominence, local business needs
+### Paleta de Cores
 
-## Color Palette
+#### Cores Primárias
+- **Primary Blue**: `hsl(217, 91%, 60%)` - #3B82F6
+  - Cor principal do sistema
+  - Usado em CTAs, links e elementos interativos
+  - Transmite confiança e profissionalismo (essencial para aplicações financeiras)
 
-**Note**: Adapt these recommendations to match the provided logo once colors are extracted.
+#### Cores de Superfície
+- **Background Light**: `hsl(0, 0%, 100%)` - Branco puro
+- **Card Light**: `hsl(0, 0%, 100%)` - Mesmo que background para look limpo
+- **Muted Light**: `hsl(210, 40%, 96%)` - Cinza muito claro
 
-### Light Mode
-- **Primary Brand**: 220 85% 55% (Professional blue - trust/finance)
-- **Secondary/Accent**: 142 76% 36% (Success green for payment confirmations)
-- **Background**: 0 0% 98% (Subtle warm gray)
-- **Surface**: 0 0% 100% (Pure white cards)
-- **Text Primary**: 220 15% 20% (Deep blue-gray)
-- **Text Secondary**: 220 10% 45%
+- **Background Dark**: `hsl(222, 47%, 11%)` - Azul escuro profundo
+- **Card Dark**: `hsl(217, 33%, 17%)` - Azul escuro elevado
+- **Muted Dark**: `hsl(217, 33%, 20%)` - Azul escuro levemente elevado
+
+#### Cores Semânticas
+- **Success**: `hsl(142, 76%, 36%)` - Verde para pagamentos confirmados
+- **Warning**: `hsl(38, 92%, 50%)` - Amarelo para cobranças pendentes
+- **Destructive**: `hsl(0, 84%, 60%)` - Vermelho para falhas e cancelamentos
+- **Info**: `hsl(199, 89%, 48%)` - Azul informativo
+
+### Tipografia
+
+#### Fontes
+- **Sans-serif**: Inter (UI, texto geral)
+  - Weights: 300 (light), 400 (regular), 500 (medium), 600 (semibold), 700 (bold), 800 (extrabold)
+  - Usada para interface, títulos, labels, botões
+  
+- **Monospace**: Roboto Mono (valores financeiros)
+  - Weights: 400 (regular), 500 (medium), 600 (semibold)
+  - Usada exclusivamente para valores monetários, datas, CPF/CNPJ, códigos
+
+#### Hierarquia
+- **H1**: 3xl (30px) - Títulos principais de página
+- **H2**: 2xl (24px) - Seções principais
+- **H3**: xl (20px) - Subsections
+- **Body**: base (16px) - Texto padrão
+- **Small**: sm (14px) - Legendas e labels
+- **XSmall**: xs (12px) - Metadados e informações terciárias
+
+#### Cores de Texto
+- **Foreground**: Texto principal (preto escuro / branco claro)
+- **Muted Foreground**: Texto secundário com 60% de opacidade
+- **Tertiary**: Informações terciárias (não implementado, usar muted-foreground)
+
+## Componentes
+
+### Cartões KPI (Dashboard)
+- **Estrutura**: CardHeader com ícone + título, CardContent com valor grande
+- **Valores**: Sempre em Roboto Mono, bold, tamanho 2xl
+- **Ícones**: Lucide React, 16x16px, cor muted-foreground
+- **Trend**: Indicadores com ↑/↓ em verde/vermelho
+
+### Tabelas
+- **Header**: Background muted, texto semibold
+- **Rows**: Hover elevate sutil
+- **Células financeiras**: Roboto Mono para valores
+- **Actions**: Botões ghost icon-only alinhados à direita
+
+### Badges de Status
+- **EM_ABERTO**: Variant default (azul)
+- **PAGO**: Variant secondary (verde/cinza)
+- **CANCELADO**: Variant outline (cinza)
+- **FALHOU**: Variant destructive (vermelho)
+
+### Formulários
+- **Labels**: Sempre acima do campo, texto sm, semibold
+- **Inputs**: Border sutil, focus ring primary
+- **Máscaras**: WhatsApp (XX) XXXXX-XXXX, CPF/CNPJ formatados
+- **Validation**: Mensagens de erro abaixo do campo em destructive
+
+### Sidebar
+- **Width**: 16rem (256px)
+- **Background**: Sidebar color (ligeiramente elevada do background)
+- **Items**: SidebarMenuButton com ícone + texto
+- **Active**: Background sidebar-accent
+- **Footer**: User avatar + nome + email + botão logout
+
+### Botões
+- **Primary**: Background primary, hover elevate
+- **Secondary**: Background secondary, hover elevate
+- **Outline**: Border + transparent bg, hover elevate
+- **Ghost**: Transparent, hover elevate (usado em tabelas)
+- **Icon**: 36x36px quadrado
+
+## Layout
+
+### Estrutura Principal
+- **Sidebar**: Fixa à esquerda, 256px
+- **Header**: Barra superior com SidebarTrigger + ThemeToggle
+- **Main**: Content area com padding 32px, scrollable
+- **Max-width**: Nenhum (full-width para aproveitar espaço)
+
+### Espaçamento
+- **Small**: 1rem (16px) - Entre elementos relacionados
+- **Medium**: 1.5rem (24px) - Entre seções de um card
+- **Large**: 2rem (32px) - Entre cards/componentes principais
+
+### Grid
+- **Dashboard KPIs**: 4 colunas em desktop, 2 em tablet, 1 em mobile
+- **Plan Cards**: 3 colunas em desktop, 1 em mobile
+- **Forms**: 2 colunas para campos relacionados
+
+## Interações
+
+### Estados
+- **Hover**: Brightness elevation (+5% light / +10% dark)
+- **Active**: Brightness elevation (+10% light / +25% dark)
+- **Focus**: Ring primary, offset 2px
+- **Disabled**: Opacity 50%, cursor not-allowed
+
+### Animações
+- **Transitions**: 200ms ease para hover, 100ms para active
+- **Accordion**: 200ms ease-out
+- **Page transitions**: Sem animações (navegação instantânea)
+
+## Acessibilidade
+
+### Contraste
+- Todas as combinações de cores atendem WCAG AA (4.5:1)
+- Primary text sobre background: ✓
+- Muted text sobre background: ✓
+- White text sobre primary: ✓
+
+### Navegação
+- Todos os botões têm `data-testid` para testes
+- Labels associadas a inputs via htmlFor
+- Sidebar navegável por teclado
 
 ### Dark Mode
-- **Primary Brand**: 220 85% 65% (Lighter blue for contrast)
-- **Secondary/Accent**: 142 70% 45% (Vibrant green)
-- **Background**: 220 15% 10% (Deep blue-black)
-- **Surface**: 220 12% 15% (Elevated dark cards)
-- **Text Primary**: 0 0% 95%
-- **Text Secondary**: 0 0% 70%
+- Toggle sempre visível no header
+- Persistido em localStorage
+- Cores ajustadas para manter contraste adequado
 
-### Semantic Colors
-- **Success**: 142 76% 36% (Green - payment received)
-- **Warning**: 38 92% 50% (Amber - pending payment)
-- **Error**: 0 84% 60% (Red - failed/overdue)
-- **Info**: 199 89% 48% (Cyan - neutral information)
+## Localização (pt-BR)
 
-## Typography
+### Formatação
+- **Moeda**: R$ 1.234,56 (ponto para milhar, vírgula para decimal)
+- **Data**: DD/MM/YYYY (01/01/2024)
+- **WhatsApp**: (XX) XXXXX-XXXX
+- **CPF**: XXX.XXX.XXX-XX
+- **CNPJ**: XX.XXX.XXX/XXXX-XX
 
-**Primary Font Family**: 'Inter' or 'Manrope' (clean, modern sans-serif via Google Fonts)
-**Secondary Font Family**: 'Roboto Mono' (for financial values, codes, IDs)
+### Mensagens
+- "Bem-vindo" → "1 hora a mais no seu dia"
+- Preferência por linguagem direta e objetiva
+- Tom profissional mas acolhedor
 
-### Type Scale
-- **Display**: text-4xl font-bold (Dashboard headers)
-- **H1**: text-3xl font-semibold (Page titles)
-- **H2**: text-2xl font-semibold (Section headers)
-- **H3**: text-xl font-medium (Card titles)
-- **Body**: text-base (Standard content)
-- **Small**: text-sm (Secondary info, labels)
-- **Tiny**: text-xs (Metadata, timestamps)
+## Princípios de Design
 
-### Financial Data
-- Use `font-mono` for: Currency values, IDs, dates
-- Bold weights for totals and key metrics
+1. **Clareza sobre estilo**: Informação primeiro, decoração depois
+2. **Consistência**: Mesmo padrão em toda a aplicação
+3. **Feedback imediato**: Loading states, success/error messages
+4. **Mobile-first responsivo**: Funciona bem em todos os tamanhos
+5. **Eficiência**: Minimizar cliques para tarefas comuns
+6. **Confiança**: Design profissional para lidar com dinheiro
 
-## Layout System
+## Componentes Futuros (não implementados)
 
-**Spacing Primitives**: Tailwind units of **2, 4, 8, 12, 16** (e.g., p-4, gap-8, mb-12)
-
-### Grid Structure
-- **Dashboard**: 12-column grid (lg:grid-cols-12)
-- **Data Tables**: Full-width with horizontal scroll on mobile
-- **Forms**: Max-width 2xl (max-w-2xl) centered
-- **Sidebar**: Fixed 64 (w-64) on desktop, overlay on mobile
-
-### Container Patterns
-- **Page Container**: max-w-7xl mx-auto px-4 sm:px-6 lg:px-8
-- **Card Spacing**: p-6 on desktop, p-4 on mobile
-- **Section Gaps**: space-y-8 or gap-8
-
-## Component Library
-
-### Navigation
-- **Sidebar (Desktop)**: Fixed left, dark background, icons + text
-- **Top Bar**: Mobile hamburger menu, user profile, notifications
-- **Breadcrumbs**: For deep navigation (Dashboard > Clientes > Detalhes)
-
-### Data Display
-- **Tables**: 
-  - Striped rows (odd:bg-gray-50 dark:odd:bg-gray-800)
-  - Sticky headers
-  - Action column (right-aligned)
-  - Mobile: Card-based layout with stacked data
-
-- **Cards**:
-  - Elevated shadow (shadow-sm hover:shadow-md)
-  - Rounded corners (rounded-lg)
-  - Border on light mode (border border-gray-200)
-
-- **KPI Cards (Dashboard)**:
-  - Large numeric value (text-3xl font-bold font-mono)
-  - Icon indicator (top-right)
-  - Trend arrow (up/down with color)
-  - Grid layout: grid-cols-1 md:grid-cols-2 lg:grid-cols-4
-
-### Forms
-- **Input Fields**: 
-  - Consistent height (h-10)
-  - Border with focus ring (focus:ring-2 focus:ring-primary)
-  - Label above input (text-sm font-medium mb-1)
-
-- **Buttons**:
-  - Primary: Filled with brand color
-  - Secondary: Outline (border-2)
-  - Ghost: Transparent (text only)
-  - Sizes: sm (h-8 px-3), md (h-10 px-4), lg (h-12 px-6)
-
-### Status Indicators
-- **Payment Status Badges**:
-  - EM_ABERTO: Yellow/amber background
-  - PAGO: Green background
-  - CANCELADO: Gray background
-  - FALHOU: Red background
-  - Use: rounded-full px-3 py-1 text-xs font-medium
-
-### Modals & Overlays
-- **Modal**: Centered, max-w-2xl, backdrop blur (backdrop-blur-sm)
-- **Drawer**: Side panel for filters/details (right-side slide)
-- **Toast Notifications**: Top-right, auto-dismiss, color-coded by type
-
-## Page-Specific Layouts
-
-### Dashboard (Logado)
-- **Hero Stats**: 4-column KPI grid (Cobranças, Faturamento, Clientes)
-- **Charts Section**: 2-column layout (Revenue graph + Client distribution)
-- **Recent Activity**: Table of latest 10 cobranças
-- **Quick Actions**: Floating action button (bottom-right) for "Nova Cobrança"
-
-### Cliente Management
-- **List View**: 
-  - Search bar + filters (top)
-  - Table with: Nome, WhatsApp, Status, Ações
-  - Pagination (bottom)
-  - Empty state: Illustration + "Adicionar Primeiro Cliente"
-
-### Cobranças
-- **Filters Panel**: Collapsible left sidebar (desktop) or top drawer (mobile)
-- **Status Overview**: Mini KPI cards showing count by status
-- **Table Columns**: Cliente, Valor, Vencimento, Status, Ações
-- **Bulk Actions**: Checkbox selection for multiple operations
-
-### Onboarding Flow
-- **Step Indicator**: Progress bar (top) showing 3 steps
-- **Form Layout**: Centered card (max-w-md), single column
-- **Plan Selection**: Card grid with hover elevation
-- **Payment Screen**: Two-column (Payment details | QR Code/Link)
-
-### Painel Administrativo
-- **Full-width Layout**: No max-width constraint
-- **Advanced Tables**: Sortable columns, inline editing
-- **Assinante Details**: Tab navigation (Dados | Assinatura | Histórico)
-
-## Icons
-
-**Library**: Lucide React (via CDN or npm)
-**Usage**:
-- Navigation: 20px icons
-- Buttons: 16px icons
-- Status: 12px icons
-- Illustrations: Use placeholder comments for custom SVGs
-
-## Animations
-
-**Minimal & Purposeful**:
-- Page transitions: Fade-in (200ms)
-- Hover states: Scale 1.02 on cards
-- Loading: Spinner for async operations
-- No decorative animations
-
-## Images
-
-**Usage**:
-1. **Empty States**: Use illustrations for "No clients yet", "No charges"
-2. **Logo**: Header placement (top-left in sidebar)
-3. **User Avatars**: Circular, initials fallback
-4. **No Hero Images**: Utility-focused app - prioritize data over imagery
-
-## Accessibility
-
-- Maintain WCAG AA contrast ratios
-- All interactive elements: min 44x44px touch targets
-- Form labels always visible (no placeholder-only)
-- Dark mode toggle: Persistent across sessions
-- Keyboard navigation: Focus indicators on all controls
-
-## Responsive Breakpoints
-
-- **Mobile**: < 768px (single column, card-based)
-- **Tablet**: 768px - 1024px (2-column grids)
-- **Desktop**: > 1024px (full layout with sidebar)
-
-## Brazilian Localization
-
-- Currency: Format as `R$ 1.234,56` (Brazilian real)
-- Dates: dd/MM/yyyy format
-- Phone: WhatsApp format `(11) 98765-4321`
-- CPF/CNPJ: Proper masking `123.456.789-00` / `12.345.678/0001-90`
+- [ ] Gráficos de faturamento (Recharts)
+- [ ] Timeline de pagamentos
+- [ ] Notifications/Toasts customizados
+- [ ] Data pickers brasileiros
+- [ ] Upload de documentos/anexos
+- [ ] Multi-step wizards para onboarding complexo

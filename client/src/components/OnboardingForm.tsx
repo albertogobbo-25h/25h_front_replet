@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { formatWhatsApp } from "@/lib/masks";
 
 interface OnboardingFormProps {
   onSubmit?: (data: { nome: string; whatsapp: string }) => void;
@@ -11,6 +12,11 @@ interface OnboardingFormProps {
 export default function OnboardingForm({ onSubmit }: OnboardingFormProps) {
   const [nome, setNome] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+
+  const handleWhatsAppChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatWhatsApp(e.target.value);
+    setWhatsapp(formatted);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +55,7 @@ export default function OnboardingForm({ onSubmit }: OnboardingFormProps) {
                 type="tel"
                 placeholder="(11) 98765-4321"
                 value={whatsapp}
-                onChange={(e) => setWhatsapp(e.target.value)}
+                onChange={handleWhatsAppChange}
                 required
                 data-testid="input-whatsapp"
               />
