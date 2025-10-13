@@ -149,3 +149,148 @@ await supabase.auth.updateUser({
 - ✅ Toast de sucesso exibido: "Dados atualizados"
 - ✅ Modal de pagamento abre corretamente
 - ✅ Valores exibidos formatados ao reabrir o modal
+
+## Modal de Dados Cadastrais - Proteção Contra Reload
+
+### Problema Corrigido (2025-10-13)
+**Erro**: Modal de Dados Cadastrais recarregava no meio do preenchimento, perdendo todos os dados digitados.
+
+**Causa Raiz**:
+- `useEffect` executava sempre que `dadosAtuais` mudava
+- Queries ou mudanças de estado causavam re-render e resetavam o formulário
+- Usuário perdia todo o progresso de digitação
+
+**Solução Implementada**:
+
+1. **Estado `userHasEdited`** (ModalDadosCadastrais.tsx)
+   ```typescript
+   const [userHasEdited, setUserHasEdited] = useState(false);
+   
+   // Resetar quando modal abre
+   useEffect(() => {
+     if (open) setUserHasEdited(false);
+   }, [open]);
+   
+   // Carregar dados APENAS se usuário não editou
+   useEffect(() => {
+     if (open && dadosAtuais && !userHasEdited) {
+       setFormData({ ... }); // Carregar do backend
+     }
+   }, [open, dadosAtuais, userHasEdited]);
+   ```
+
+2. **Handlers marcam edição**
+   ```typescript
+   const handleFieldChange = (field: string, value: string) => {
+     setUserHasEdited(true);  // Protege contra reset
+     setFormData({ ...formData, [field]: value });
+   };
+   ```
+
+3. **Proteção em TODOS os inputs**
+   - Nome / Razão Social
+   - Nome Fantasia
+   - Email
+   - CPF/CNPJ (com formatação)
+   - WhatsApp (com formatação)
+   - Select Tipo de Pessoa
+
+**Fluxo de Proteção**:
+1. Modal abre → `userHasEdited = false`
+2. Dados do backend carregam → preenche campos (se usuário não editou)
+3. Usuário digita QUALQUER coisa → `userHasEdited = true`
+4. Se `dadosAtuais` mudar → **NÃO reseta** (protegido por `!userHasEdited`)
+
+**Teste E2E Validado**:
+- ✅ Campos preenchidos DEVAGAR (com pausas) não foram resetados
+- ✅ Valores digitados preservados durante toda a digitação
+- ✅ Modal permite carregamento assíncrono de dados sem perder input do usuário
+
+## Problemas de Backend Identificados (Fora do Escopo Frontend)
+
+### 1. RPC `atualizar_dados_assinante` - Duplicate Key Error
+
+**Erro Observado**: 
+```
+"duplicate key value violates unique constraint 'assinantes_cpf_cnpj_key'"
+```
+
+**Contexto**:
+- Ocorre ao tentar atualizar dados cadastrais via ModalDadosCadastrais
+- Frontend chama: `supabase.rpc('atualizar_dados_assinante', { p_cpf_cnpj, p_tipo_pessoa, ... })`
+- Payload enviado: CPF/CNPJ sem formatação (apenas números, 11-14 chars)
+
+**Passos para Reproduzir**:
+1. Usuário já possui dados cadastrais salvos (CPF/CNPJ existente)
+2. Acessar página Assinatura → Mudar Plano → Preencher dados cadastrais
+3. Tentar salvar com MESMO CPF/CNPJ ou qualquer CPF/CNPJ
+4. Erro: constraint violation
+
+**Causa Raiz Identificada**: 
+RPC está tentando fazer INSERT em vez de UPDATE quando registro do assinante já existe.
+
+**Impacto**: 
+Usuários com dados cadastrais prévios não conseguem atualizar informações para contratar planos pagos.
+
+**Solução Necessária**: 
+Corrigir lógica da RPC `atualizar_dados_assinante` no Supabase:
+- Verificar se registro existe (por auth.uid())
+- Se existe → UPDATE
+- Se não existe → INSERT
+- Ou usar UPSERT (INSERT ... ON CONFLICT DO UPDATE)
+
+**Critério de Aceitação**:
+- ✅ Usuário com dados prévios consegue atualizar CPF/CNPJ sem erro
+- ✅ Toast de sucesso "Dados atualizados" aparece
+- ✅ Modal de pagamento abre após salvar
+
+### 2. Edge Function `iniciar_pagto_assinante` - Status 500
+
+**Erro Observado**: 
+```
+"Edge Function returned a non-2xx status code"
+Status: 500
+```
+
+**Contexto**:
+- Ocorre após criar assinatura e tentar iniciar pagamento
+- Frontend chama: `supabase.functions.invoke('iniciar_pagto_assinante', { body: { cobranca_id, meio_pagamento } })`
+- Assinatura é criada com sucesso (toast "Assinatura criada" aparece)
+- Modal de pagamento abre mas falha ao confirmar
+
+**Passos para Reproduzir**:
+1. Criar conta → Completar onboarding (plano Free criado)
+2. Assinatura → Mudar Plano → Selecionar plano pago
+3. Preencher dados cadastrais → Salvar
+4. Modal de pagamento abre → Confirmar Pagamento
+5. Erro: Vite overlay "Edge Function returned a non-2xx status code"
+
+**Logs do Browser Console**:
+- `Failed to load resource: the server responded with a status of 500`
+- Modal fica em estado "Processando..." indefinidamente
+
+**Impacto**: 
+Pagamentos não são iniciados. Usuários não conseguem ativar planos pagos mesmo após assinatura criada.
+
+**Solução Necessária**: 
+1. Verificar logs da Edge Function `iniciar_pagto_assinante` no Supabase
+2. Investigar integração com API Pluggy (credenciais, payload, endpoints)
+3. Adicionar tratamento de erros adequado
+4. Retornar erro estruturado para o frontend em vez de 500
+
+**Critério de Aceitação**:
+- ✅ Edge Function retorna 200 com URL de pagamento Pluggy
+- ✅ Ou retorna erro estruturado (400/422) com mensagem clara
+- ✅ Modal de pagamento não trava em "Processando..."
+- ✅ Usuário é redirecionado para Pluggy ou vê mensagem de erro clara
+
+### Workarounds Temporários
+
+**Para Duplicate Key Error**:
+- Deletar dados cadastrais existentes via Supabase Dashboard antes de atualizar
+- Ou criar função temporária que força UPDATE baseado em auth.uid()
+
+**Para Edge Function 500**:
+- Verificar credenciais Pluggy (PLUGGY_CLIENT_ID, PLUGGY_CLIENT_SECRET)
+- Confirmar que ambiente de testes Pluggy está ativo
+- Validar formato do payload enviado à API Pluggy
