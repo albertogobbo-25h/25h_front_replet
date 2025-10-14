@@ -1,40 +1,144 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatWhatsApp } from "@/lib/masks";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
+import { formatWhatsApp, unformatWhatsApp, formatCNPJ, unformatCPFCNPJ, formatCEP } from "@/lib/masks";
+import { Loader2 } from "lucide-react";
+
+interface DadosAssinante {
+  id: string;
+  nome: string;
+  nome_fantasia: string | null;
+  cpf_cnpj: string;
+  tipo_pessoa: 'FISICA' | 'JURIDICA';
+  email: string;
+  whatsapp: string | null;
+  rua: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  uf: string | null;
+  cep: string | null;
+}
 
 export default function Perfil() {
-  // TODO: Remove mock data
+  const { toast } = useToast();
   const [formData, setFormData] = useState({
-    nome: 'João Silva',
-    email: 'joao@exemplo.com',
-    cpfCnpj: '123.456.789-00',
-    tipoPessoa: 'FISICA',
-    whatsapp: '(11) 98765-4321',
-    rua: 'Rua Exemplo',
-    numero: '123',
-    complemento: 'Apt 45',
-    bairro: 'Centro',
-    cidade: 'São Paulo',
-    uf: 'SP',
-    cep: '01234-567',
+    nome: '',
+    nome_fantasia: '',
+    email: '',
+    cnpj: '',
+    whatsapp: '',
+    rua: '',
+    numero: '',
+    complemento: '',
+    bairro: '',
+    cidade: '',
+    uf: '',
+    cep: '',
+  });
+
+  // Query: Obter dados do assinante
+  const { data: dadosAssinante, isLoading } = useQuery<DadosAssinante | null>({
+    queryKey: ['/api/assinante/dados'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('obter_dados_assinante');
+
+      if (error) throw error;
+      if (data?.status === 'ERROR') throw new Error(data.message);
+
+      return data?.data || null;
+    },
+  });
+
+  // Carregar dados do assinante no formulário
+  useEffect(() => {
+    if (dadosAssinante) {
+      setFormData({
+        nome: dadosAssinante.nome || '',
+        nome_fantasia: dadosAssinante.nome_fantasia || '',
+        email: dadosAssinante.email || '',
+        cnpj: formatCNPJ(dadosAssinante.cpf_cnpj || ''),
+        whatsapp: formatWhatsApp(dadosAssinante.whatsapp || ''),
+        rua: dadosAssinante.rua || '',
+        numero: dadosAssinante.numero || '',
+        complemento: dadosAssinante.complemento || '',
+        bairro: dadosAssinante.bairro || '',
+        cidade: dadosAssinante.cidade || '',
+        uf: dadosAssinante.uf || '',
+        cep: formatCEP(dadosAssinante.cep || ''),
+      });
+    }
+  }, [dadosAssinante]);
+
+  // Mutation: Atualizar dados do assinante
+  const atualizarDadosMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('atualizar_dados_assinante', {
+        p_nome: formData.nome,
+        p_nome_fantasia: formData.nome_fantasia || null,
+        p_cpf_cnpj: unformatCPFCNPJ(formData.cnpj),
+        p_tipo_pessoa: 'JURIDICA',
+        p_email: formData.email,
+        p_whatsapp: unformatWhatsApp(formData.whatsapp) || null,
+        p_rua: formData.rua || null,
+        p_numero: formData.numero || null,
+        p_complemento: formData.complemento || null,
+        p_bairro: formData.bairro || null,
+        p_cidade: formData.cidade || null,
+        p_uf: formData.uf || null,
+        p_cep: formData.cep.replace(/\D/g, '') || null,
+      });
+
+      if (error) throw error;
+      if (data?.status === 'ERROR') throw new Error(data.message);
+
+      return data;
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Dados atualizados',
+        description: 'Seus dados foram atualizados com sucesso',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro ao atualizar dados',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Profile updated:', formData);
+    atualizarDadosMutation.mutate();
   };
 
   const handleChange = (field: string, value: string) => {
     if (field === 'whatsapp') {
       setFormData(prev => ({ ...prev, [field]: formatWhatsApp(value) }));
+    } else if (field === 'cnpj') {
+      setFormData(prev => ({ ...prev, [field]: formatCNPJ(value) }));
+    } else if (field === 'cep') {
+      setFormData(prev => ({ ...prev, [field]: formatCEP(value) }));
     } else {
       setFormData(prev => ({ ...prev, [field]: value }));
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -46,51 +150,53 @@ export default function Perfil() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Dados Pessoais</CardTitle>
-            <CardDescription>Informações básicas do assinante</CardDescription>
+            <CardTitle>Dados da Empresa</CardTitle>
+            <CardDescription>Informações cadastrais da sua empresa</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="nome">Nome / Razão Social</Label>
+                <Label htmlFor="nome">Razão Social <span className="text-destructive">*</span></Label>
                 <Input
                   id="nome"
                   value={formData.nome}
                   onChange={(e) => handleChange('nome', e.target.value)}
+                  required
                   data-testid="input-nome"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="nome_fantasia">Nome Fantasia</Label>
                 <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => handleChange('email', e.target.value)}
-                  data-testid="input-email"
+                  id="nome_fantasia"
+                  value={formData.nome_fantasia}
+                  onChange={(e) => handleChange('nome_fantasia', e.target.value)}
+                  placeholder="Como sua empresa é conhecida"
+                  data-testid="input-nome-fantasia"
                 />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="tipoPessoa">Tipo de Pessoa</Label>
-                <Select value={formData.tipoPessoa} onValueChange={(value) => handleChange('tipoPessoa', value)}>
-                  <SelectTrigger id="tipoPessoa" data-testid="select-tipo-pessoa">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="FISICA">Pessoa Física</SelectItem>
-                    <SelectItem value="JURIDICA">Pessoa Jurídica</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="cnpj">CNPJ <span className="text-destructive">*</span></Label>
+                <Input
+                  id="cnpj"
+                  value={formData.cnpj}
+                  onChange={(e) => handleChange('cnpj', e.target.value)}
+                  placeholder="00.000.000/0000-00"
+                  required
+                  data-testid="input-cnpj"
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="cpfCnpj">CPF / CNPJ</Label>
+                <Label htmlFor="email">Email <span className="text-destructive">*</span></Label>
                 <Input
-                  id="cpfCnpj"
-                  value={formData.cpfCnpj}
-                  onChange={(e) => handleChange('cpfCnpj', e.target.value)}
-                  data-testid="input-cpf-cnpj"
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => handleChange('email', e.target.value)}
+                  required
+                  data-testid="input-email"
                 />
               </div>
             </div>
@@ -100,6 +206,7 @@ export default function Perfil() {
                 id="whatsapp"
                 value={formData.whatsapp}
                 onChange={(e) => handleChange('whatsapp', e.target.value)}
+                placeholder="(11) 98765-4321"
                 data-testid="input-whatsapp"
               />
             </div>
@@ -186,7 +293,14 @@ export default function Perfil() {
         </Card>
 
         <div className="flex justify-end">
-          <Button type="submit" data-testid="button-save-profile">
+          <Button 
+            type="submit" 
+            disabled={atualizarDadosMutation.isPending}
+            data-testid="button-save-profile"
+          >
+            {atualizarDadosMutation.isPending && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            )}
             Salvar Alterações
           </Button>
         </div>
