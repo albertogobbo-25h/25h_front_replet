@@ -175,40 +175,15 @@ export default function AssinaturaPage() {
   // Mutation: Cancelar assinatura via Edge Function
   const cancelarAssinaturaMutation = useMutation({
     mutationFn: async ({ assinaturaId, motivo }: { assinaturaId: string; motivo?: string }) => {
-      const { data: session } = await supabase.auth.getSession();
-      
-      if (!session?.session?.access_token) {
-        throw new Error('Sessão inválida. Faça login novamente.');
-      }
-
-      const edgeFunctionUrl = import.meta.env.VITE_SUPABASE_EDGE_CANCELAR_ASSINATURA;
-      
-      if (!edgeFunctionUrl) {
-        throw new Error('URL da Edge Function não configurada.');
-      }
-
-      const response = await fetch(edgeFunctionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.session.access_token}`,
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('cancelar_assinatura', {
+        body: {
           assinatura_id: assinaturaId,
           motivo: motivo || 'solicitacao_usuario',
-        }),
+        },
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Erro ao cancelar assinatura');
-      }
-
-      const data = await response.json();
-      
-      if (data.status === 'ERROR') {
-        throw new Error(data.message || 'Erro ao processar cancelamento');
-      }
+      if (error) throw error;
+      if (data?.status === 'ERROR') throw new Error(data.message || 'Erro ao processar cancelamento');
 
       return data;
     },
