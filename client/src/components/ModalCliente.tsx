@@ -69,6 +69,7 @@ export default function ModalCliente({
       if (isEdit && cliente) {
         // Atualizar cliente existente
         const { error } = await supabase
+          .schema('app_data')
           .from('cliente')
           .update({
             nome: formData.nome,
@@ -88,6 +89,7 @@ export default function ModalCliente({
       } else {
         // Criar novo cliente
         const { error } = await supabase
+          .schema('app_data')
           .from('cliente')
           .insert({
             nome: formData.nome,

@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 interface AuthContextType {
   user: User | null;
   session: Session | null;
+  assinanteId: string | null;
   loading: boolean;
   signUp: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
@@ -17,13 +18,37 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [assinanteId, setAssinanteId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Buscar assinante_id quando o usuário estiver logado
+  const fetchAssinanteId = async () => {
+    try {
+      const { data, error } = await supabase.rpc('obter_dados_assinante');
+      
+      if (error) {
+        console.error('Erro ao buscar assinante_id:', error);
+        return;
+      }
+
+      if (data?.status === 'OK' && data?.data?.id) {
+        setAssinanteId(data.data.id);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar assinante_id:', error);
+    }
+  };
 
   useEffect(() => {
     // Verificar sessão atual
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        fetchAssinanteId();
+      }
+      
       setLoading(false);
     });
 
@@ -33,6 +58,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        fetchAssinanteId();
+      } else {
+        setAssinanteId(null);
+      }
+      
       setLoading(false);
     });
 
@@ -75,6 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         session,
+        assinanteId,
         loading,
         signUp,
         signIn,

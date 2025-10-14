@@ -63,6 +63,7 @@ export default function Cobrancas() {
       const { dataInicio } = getDateRange();
 
       const { data, error } = await supabase
+        .schema('app_data')
         .from('cliente_cobranca')
         .select(`
           *,
@@ -84,6 +85,7 @@ export default function Cobrancas() {
   const marcarPagoMutation = useMutation({
     mutationFn: async (cobranca: CobrancaComCliente) => {
       const { error } = await supabase
+        .schema('app_data')
         .from('cliente_cobranca')
         .update({
           status_pagamento: 'PAGO',
@@ -115,6 +117,7 @@ export default function Cobrancas() {
   const cancelarMutation = useMutation({
     mutationFn: async (cobranca: CobrancaComCliente) => {
       const { error } = await supabase
+        .schema('app_data')
         .from('cliente_cobranca')
         .update({
           status_pagamento: 'CANCELADO',

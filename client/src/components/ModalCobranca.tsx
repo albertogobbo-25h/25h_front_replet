@@ -60,6 +60,7 @@ export default function ModalCobranca({
     queryKey: ['/api/clientes-ativos'],
     queryFn: async () => {
       const { data, error } = await supabase
+        .schema('app_data')
         .from('cliente')
         .select('id, nome, nome_visualizacao')
         .eq('ind_ativo', true)
@@ -103,6 +104,7 @@ export default function ModalCobranca({
       if (isEdit && cobranca) {
         // Atualizar cobrança existente
         const { error } = await supabase
+          .schema('app_data')
           .from('cliente_cobranca')
           .update({
             descricao: formData.descricao,
@@ -122,6 +124,7 @@ export default function ModalCobranca({
       } else {
         // Criar nova cobrança
         const { error } = await supabase
+          .schema('app_data')
           .from('cliente_cobranca')
           .insert({
             cliente_id: formData.cliente_id,

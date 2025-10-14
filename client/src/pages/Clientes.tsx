@@ -24,6 +24,7 @@ export default function Clientes() {
     queryKey: ['/api/clientes'],
     queryFn: async () => {
       const { data, error } = await supabase
+        .schema('app_data')
         .from('cliente')
         .select('*')
         .order('nome', { ascending: true });
@@ -37,6 +38,7 @@ export default function Clientes() {
   const toggleStatusMutation = useMutation({
     mutationFn: async ({ id, novoStatus }: { id: string; novoStatus: boolean }) => {
       const { error } = await supabase
+        .schema('app_data')
         .from('cliente')
         .update({ ind_ativo: novoStatus, modificado_em: new Date().toISOString() })
         .eq('id', id);
