@@ -1,76 +1,225 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import CobrancaTable from "@/components/CobrancaTable";
+import ModalCobranca from "@/components/ModalCobranca";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Filter } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Plus, Filter, Loader2, TrendingUp, TrendingDown } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { formatCurrency, formatDate } from "@/lib/masks";
+import { getStatusEfetivo } from "@/lib/cobrancaUtils";
+import type { CobrancaComCliente, StatusCobranca } from "@/types/cobranca";
 
 export default function Cobrancas() {
+  const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>("todos");
   const [periodoFilter, setPeriodoFilter] = useState<string>("mes_atual");
+  const [modalNovaCobrancaOpen, setModalNovaCobrancaOpen] = useState(false);
+  const [cobrancaSelecionada, setCobrancaSelecionada] = useState<CobrancaComCliente | null>(null);
+  const [detalhesOpen, setDetalhesOpen] = useState(false);
 
-  // TODO: Remove mock data
-  const mockCobrancas = [
-    {
-      id: '1',
-      cliente: 'Maria Santos',
-      descricao: 'Mensalidade Janeiro/2024',
-      valor: 250.00,
-      dataVencimento: '2024-01-10',
-      statusPagamento: 'PAGO' as const,
-    },
-    {
-      id: '2',
-      cliente: 'João Oliveira',
-      descricao: 'Mensalidade Janeiro/2024',
-      valor: 350.00,
-      dataVencimento: '2024-01-15',
-      statusPagamento: 'EM_ABERTO' as const,
-    },
-    {
-      id: '3',
-      cliente: 'Ana Costa',
-      descricao: 'Consulta Avulsa',
-      valor: 180.00,
-      dataVencimento: '2024-01-20',
-      statusPagamento: 'FALHOU' as const,
-    },
-    {
-      id: '4',
-      cliente: 'Pedro Silva',
-      descricao: 'Mensalidade Janeiro/2024',
-      valor: 420.00,
-      dataVencimento: '2024-01-25',
-      statusPagamento: 'EM_ABERTO' as const,
-    },
-    {
-      id: '5',
-      cliente: 'Carla Mendes',
-      descricao: 'Pacote 10 sessões',
-      valor: 800.00,
-      dataVencimento: '2024-01-30',
-      statusPagamento: 'PAGO' as const,
-    },
-  ];
+  // Calcular range de datas baseado no filtro de período
+  const getDateRange = () => {
+    const hoje = new Date();
+    let dataInicio = new Date();
 
-  const filteredCobrancas = mockCobrancas.filter(cobranca => {
-    if (statusFilter === "todos") return true;
-    return cobranca.statusPagamento === statusFilter;
+    switch (periodoFilter) {
+      case 'mes_atual':
+        dataInicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        break;
+      case '3_meses':
+        dataInicio.setMonth(hoje.getMonth() - 3);
+        break;
+      case '6_meses':
+        dataInicio.setMonth(hoje.getMonth() - 6);
+        break;
+      case '12_meses':
+        dataInicio.setMonth(hoje.getMonth() - 12);
+        break;
+      default:
+        dataInicio.setMonth(hoje.getMonth() - 1);
+    }
+
+    return {
+      dataInicio: dataInicio.toISOString().split('T')[0],
+      dataFim: hoje.toISOString().split('T')[0],
+    };
+  };
+
+  // Query: Listar cobranças
+  const { data: cobrancas = [], isLoading } = useQuery<CobrancaComCliente[]>({
+    queryKey: ['/api/cobrancas', periodoFilter],
+    queryFn: async () => {
+      const { dataInicio } = getDateRange();
+
+      const { data, error } = await supabase
+        .from('cliente_cobranca')
+        .select(`
+          *,
+          cliente:cliente_id (
+            id,
+            nome,
+            nome_visualizacao
+          )
+        `)
+        .gte('data_vencimento', dataInicio)
+        .order('data_vencimento', { ascending: false });
+
+      if (error) throw error;
+      return (data || []) as CobrancaComCliente[];
+    },
   });
 
-  const totalEmAberto = filteredCobrancas
-    .filter(c => c.statusPagamento === 'EM_ABERTO')
-    .reduce((sum, c) => sum + c.valor, 0);
+  // Mutation: Marcar como pago
+  const marcarPagoMutation = useMutation({
+    mutationFn: async (cobranca: CobrancaComCliente) => {
+      const { error } = await supabase
+        .from('cliente_cobranca')
+        .update({
+          status_pagamento: 'PAGO',
+          dthr_pagamento: new Date().toISOString(),
+          meio_pagamento: 'MANUAL',
+          modificado_em: new Date().toISOString(),
+        })
+        .eq('id', cobranca.id);
 
-  const totalPago = filteredCobrancas
-    .filter(c => c.statusPagamento === 'PAGO')
-    .reduce((sum, c) => sum + c.valor, 0);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cobrancas'] });
+      toast({
+        title: 'Cobrança marcada como paga',
+        description: 'A cobrança foi atualizada com sucesso',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro ao marcar como pago',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value);
+  // Mutation: Cancelar cobrança
+  const cancelarMutation = useMutation({
+    mutationFn: async (cobranca: CobrancaComCliente) => {
+      const { error } = await supabase
+        .from('cliente_cobranca')
+        .update({
+          status_pagamento: 'CANCELADO',
+          modificado_em: new Date().toISOString(),
+        })
+        .eq('id', cobranca.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cobrancas'] });
+      toast({
+        title: 'Cobrança cancelada',
+        description: 'A cobrança foi cancelada com sucesso',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro ao cancelar cobrança',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Filtrar cobranças localmente
+  const cobrancasFiltradas = useMemo(() => {
+    return cobrancas.filter((cobranca) => {
+      const statusEfetivo = getStatusEfetivo(
+        cobranca.status_pagamento,
+        cobranca.data_vencimento
+      );
+
+      if (statusFilter === 'todos') return true;
+      if (statusFilter === 'EM_ABERTO') {
+        return statusEfetivo === 'EM_ABERTO' || statusEfetivo === 'VENCIDO';
+      }
+      return statusEfetivo === statusFilter;
+    });
+  }, [cobrancas, statusFilter]);
+
+  // Calcular totalizadores
+  const totalizadores = useMemo(() => {
+    return cobrancasFiltradas.reduce(
+      (acc, cobranca) => {
+        const valor = Number(cobranca.valor_total);
+        const statusEfetivo = getStatusEfetivo(
+          cobranca.status_pagamento,
+          cobranca.data_vencimento
+        );
+
+        acc.totalGeral += valor;
+        acc.quantidadeTotal += 1;
+
+        if (statusEfetivo === 'EM_ABERTO') {
+          acc.totalEmAberto += valor;
+          acc.quantidadeEmAberto += 1;
+        } else if (statusEfetivo === 'VENCIDO') {
+          acc.totalVencido += valor;
+          acc.quantidadeVencido += 1;
+        } else if (statusEfetivo === 'PAGO') {
+          acc.totalPago += valor;
+          acc.quantidadePago += 1;
+        } else if (statusEfetivo === 'CANCELADO') {
+          acc.totalCancelado += valor;
+          acc.quantidadeCancelado += 1;
+        }
+
+        return acc;
+      },
+      {
+        totalEmAberto: 0,
+        totalPago: 0,
+        totalVencido: 0,
+        totalCancelado: 0,
+        totalGeral: 0,
+        quantidadeEmAberto: 0,
+        quantidadePago: 0,
+        quantidadeVencido: 0,
+        quantidadeCancelado: 0,
+        quantidadeTotal: 0,
+      }
+    );
+  }, [cobrancasFiltradas]);
+
+  const handleVerDetalhes = (cobranca: CobrancaComCliente) => {
+    setCobrancaSelecionada(cobranca);
+    setDetalhesOpen(true);
+  };
+
+  const handleEnviarWhatsApp = (cobranca: CobrancaComCliente) => {
+    const mensagem = `Olá! Você tem uma cobrança pendente:\n\nDescrição: ${cobranca.descricao}\nValor: ${formatCurrency(Number(cobranca.valor_total))}\nVencimento: ${formatDate(cobranca.data_vencimento)}`;
+    
+    // TODO: Integrar com API de WhatsApp real quando disponível
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
+    window.open(whatsappUrl, '_blank');
+
+    toast({
+      title: 'Link do WhatsApp gerado',
+      description: 'Use o link para enviar a cobrança',
+    });
+  };
+
+  const handleModalSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/cobrancas'] });
   };
 
   return (
@@ -80,45 +229,81 @@ export default function Cobrancas() {
           <h1 className="text-3xl font-bold">Cobranças</h1>
           <p className="text-muted-foreground">Gerencie suas cobranças</p>
         </div>
-        <Button data-testid="button-add-cobranca" onClick={() => console.log('Add cobranca clicked')}>
+        <Button
+          data-testid="button-add-cobranca"
+          onClick={() => setModalNovaCobrancaOpen(true)}
+        >
           <Plus className="mr-2 h-4 w-4" />
           Nova Cobrança
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Totalizadores */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total em Aberto</CardTitle>
+            <CardTitle className="text-sm font-medium flex items-center justify-between">
+              Total em Aberto
+              <TrendingUp className="h-4 w-4 text-warning" />
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono text-warning">
-              {formatCurrency(totalEmAberto)}
+              {formatCurrency(totalizadores.totalEmAberto)}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {totalizadores.quantidadeEmAberto} {totalizadores.quantidadeEmAberto === 1 ? 'cobrança' : 'cobranças'}
+            </p>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center justify-between">
+              Total Vencido
+              <TrendingDown className="h-4 w-4 text-destructive" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold font-mono text-destructive">
+              {formatCurrency(totalizadores.totalVencido)}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {totalizadores.quantidadeVencido} {totalizadores.quantidadeVencido === 1 ? 'cobrança' : 'cobranças'}
+            </p>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Recebido</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono text-success">
-              {formatCurrency(totalPago)}
+              {formatCurrency(totalizadores.totalPago)}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {totalizadores.quantidadePago} {totalizadores.quantidadePago === 1 ? 'cobrança' : 'cobranças'}
+            </p>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Geral</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono">
-              {formatCurrency(totalEmAberto + totalPago)}
+              {formatCurrency(totalizadores.totalGeral)}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {totalizadores.quantidadeTotal} {totalizadores.quantidadeTotal === 1 ? 'cobrança' : 'cobranças'}
+            </p>
           </CardContent>
         </Card>
       </div>
 
+      {/* Filtros */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -155,16 +340,125 @@ export default function Cobrancas() {
         </CardContent>
       </Card>
 
+      {/* Tabela de Cobranças */}
       <Card>
         <CardHeader>
           <CardTitle>
-            {filteredCobrancas.length} {filteredCobrancas.length === 1 ? 'cobrança' : 'cobranças'}
+            {isLoading ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Carregando cobranças...
+              </div>
+            ) : (
+              <>
+                {cobrancasFiltradas.length}{' '}
+                {cobrancasFiltradas.length === 1 ? 'cobrança' : 'cobranças'}
+              </>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <CobrancaTable cobrancas={filteredCobrancas} />
+          {isLoading ? (
+            <div className="text-center py-8 text-muted-foreground">Carregando...</div>
+          ) : (
+            <CobrancaTable
+              cobrancas={cobrancasFiltradas}
+              onView={handleVerDetalhes}
+              onEnviarWhatsApp={handleEnviarWhatsApp}
+              onMarcarPago={(cobranca) => marcarPagoMutation.mutate(cobranca)}
+              onCancelar={(cobranca) => cancelarMutation.mutate(cobranca)}
+            />
+          )}
         </CardContent>
       </Card>
+
+      {/* Modal Nova Cobrança */}
+      <ModalCobranca
+        open={modalNovaCobrancaOpen}
+        onClose={() => setModalNovaCobrancaOpen(false)}
+        onSuccess={handleModalSuccess}
+      />
+
+      {/* Dialog Detalhes da Cobrança */}
+      <Dialog open={detalhesOpen} onOpenChange={setDetalhesOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Detalhes da Cobrança</DialogTitle>
+            <DialogDescription>Informações completas da cobrança</DialogDescription>
+          </DialogHeader>
+
+          {cobrancaSelecionada && (
+            <div className="space-y-4 py-4">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Cliente</p>
+                <p className="text-base font-semibold">
+                  {cobrancaSelecionada.cliente?.nome_visualizacao ||
+                    cobrancaSelecionada.cliente?.nome}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Descrição</p>
+                <p className="text-base">{cobrancaSelecionada.descricao}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Valor</p>
+                  <p className="text-base font-mono font-semibold">
+                    {formatCurrency(Number(cobrancaSelecionada.valor_total))}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Status</p>
+                  <p className="text-base font-medium">
+                    {getStatusEfetivo(
+                      cobrancaSelecionada.status_pagamento,
+                      cobrancaSelecionada.data_vencimento
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Emissão</p>
+                  <p className="text-base font-mono text-sm">
+                    {formatDate(cobrancaSelecionada.data_emissao)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Vencimento</p>
+                  <p className="text-base font-mono text-sm">
+                    {formatDate(cobrancaSelecionada.data_vencimento)}
+                  </p>
+                </div>
+              </div>
+
+              {cobrancaSelecionada.dthr_pagamento && (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Data do Pagamento</p>
+                  <p className="text-base font-mono text-sm">
+                    {formatDate(cobrancaSelecionada.dthr_pagamento)}
+                  </p>
+                </div>
+              )}
+
+              {cobrancaSelecionada.referencia_mes && (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Mês de Referência</p>
+                  <p className="text-base">
+                    {new Date(cobrancaSelecionada.referencia_mes).toLocaleDateString('pt-BR', {
+                      month: 'long',
+                      year: 'numeric',
+                    })}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
