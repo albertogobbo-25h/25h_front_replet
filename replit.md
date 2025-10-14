@@ -3,6 +3,17 @@
 ## Overview
 Sistema SaaS de gestão de cobranças com PIX automático via Pluggy, desenvolvido para profissionais autônomos e pequenas empresas no Brasil. O projeto visa otimizar a gestão financeira dos usuários, economizando tempo e aumentando a rentabilidade. A plataforma oferece funcionalidades completas de autenticação, gestão de assinaturas, clientes e cobranças. A plataforma é exclusiva para Pessoa Jurídica (CNPJ).
 
+## Recent Changes (October 14, 2025)
+- **Fixed Client Registration Error**: Updated all Supabase queries to use app_data schema for multi-tenancy support
+- **Enhanced AuthContext**: Added assinante_id fetching via obter_dados_assinante() RPC
+- **Complete Profile Implementation**: 
+  - Integrated with obter_dados_assinante() and atualizar_dados_assinante() RPCs
+  - Added Nome Fantasia field
+  - Removed "Tipo de Pessoa" (always JURIDICA)
+  - Implemented CNPJ and CEP masks
+  - Real-time data loading and saving with proper error handling
+- **Multi-tenancy Support**: All cliente and cliente_cobranca queries now properly use app_data schema
+
 ## User Preferences
 I prefer simple language and clear, concise explanations. I want iterative development with frequent, small updates. Ask for my confirmation before making any major architectural changes or implementing new features. Ensure all new code adheres to the existing coding style and uses Brazilian Portuguese localization where applicable. Do not make changes to files or folders unless explicitly instructed.
 
@@ -17,10 +28,13 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 
 ### Technical Implementations
 - **Frontend**: React, TypeScript, Vite, Tailwind CSS, Wouter for routing, TanStack Query v5 for state management.
-- **Authentication**: Supabase (email/password, Google OAuth, session management, user metadata for onboarding).
+- **Authentication**: Supabase (email/password, Google OAuth, session management, user metadata for onboarding, assinante_id in AuthContext).
 - **Subscription Management**: Complete flow including plan selection, cadastral data validation, Pluggy PIX payment integration, conditional statuses, automatic polling, upgrade, and cancellation flows.
-- **Data Management**: Supabase PostgreSQL for database.
-- **Masks**: Brazilian masks implemented for WhatsApp, CNPJ.
+- **Data Management**: 
+  - Supabase PostgreSQL with multi-tenancy (app_data schema)
+  - RLS policies using app_internal.current_assinante_id() for tenant isolation
+  - All queries use .schema('app_data') for proper schema access
+- **Masks**: Brazilian masks implemented for WhatsApp, CNPJ, CEP.
 - **Testing**: `data-testid` attributes are extensively used for E2E testing with Playwright.
 
 ### Feature Specifications
@@ -62,7 +76,14 @@ I prefer simple language and clear, concise explanations. I want iterative devel
   - CobrancaTable with actions and confirmation dialogs
   - Utility functions for status calculations and formatting
 - **Subscription**: Display current plan, pending payment actions, plan selection modal (monthly/annual), cadastral data validation, PIX payment integration via Pluggy, automatic status polling, upgrade/renewal/cancellation flows.
-- **Profile**: Personal data form (CNPJ only), optional full address, Brazilian masks.
+- **Profile**: 
+  - Complete integration with Supabase RPCs (obter_dados_assinante, atualizar_dados_assinante)
+  - Real-time data loading with TanStack Query
+  - CNPJ-only validation (Pessoa Jurídica exclusivo)
+  - Fields: Razão Social, Nome Fantasia, CNPJ, Email, WhatsApp
+  - Optional full address (Rua, Número, Complemento, Bairro, Cidade, UF, CEP)
+  - Brazilian masks for CNPJ, CEP, and WhatsApp
+  - Loading states and error handling with toasts
 
 ### System Design Choices
 - **Onboarding**: Upon signup, users complete an onboarding form, and an automatic Free plan is created via a `processar_pos_login` RPC call.
