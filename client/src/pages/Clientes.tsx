@@ -1,29 +1,91 @@
 import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import ClienteTable from "@/components/ClienteTable";
+import ModalCliente from "@/components/ModalCliente";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import type { Cliente } from "@/types/cliente";
 
 export default function Clientes() {
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("todos");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [clienteParaEditar, setClienteParaEditar] = useState<Cliente | null>(null);
 
-  // TODO: Remove mock data
-  const mockClientes = [
-    { id: '1', nome: 'Maria Santos', whatsapp: '(11) 98765-4321', indAtivo: true },
-    { id: '2', nome: 'João Oliveira', whatsapp: '(11) 97654-3210', indAtivo: true },
-    { id: '3', nome: 'Ana Costa', whatsapp: '(11) 96543-2109', indAtivo: false },
-    { id: '4', nome: 'Pedro Silva', whatsapp: '(11) 95432-1098', indAtivo: true },
-    { id: '5', nome: 'Carla Mendes', whatsapp: '(11) 94321-0987', indAtivo: true },
-  ];
+  // Query: Listar clientes
+  const { data: clientes = [], isLoading } = useQuery<Cliente[]>({
+    queryKey: ['/api/clientes'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('cliente')
+        .select('*')
+        .order('nome', { ascending: true });
 
-  const filteredClientes = mockClientes.filter(cliente => {
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // Mutation: Desativar/Ativar cliente
+  const toggleStatusMutation = useMutation({
+    mutationFn: async ({ id, novoStatus }: { id: string; novoStatus: boolean }) => {
+      const { error } = await supabase
+        .from('cliente')
+        .update({ ind_ativo: novoStatus, modificado_em: new Date().toISOString() })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/clientes'] });
+      toast({
+        title: variables.novoStatus ? 'Cliente ativado' : 'Cliente desativado',
+        description: `O cliente foi ${variables.novoStatus ? 'ativado' : 'desativado'} com sucesso`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro ao atualizar status',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleNovoCliente = () => {
+    setClienteParaEditar(null);
+    setModalOpen(true);
+  };
+
+  const handleEditarCliente = (cliente: Cliente) => {
+    setClienteParaEditar(cliente);
+    setModalOpen(true);
+  };
+
+  const handleToggleStatus = (cliente: Cliente) => {
+    toggleStatusMutation.mutate({
+      id: cliente.id,
+      novoStatus: !cliente.ind_ativo,
+    });
+  };
+
+  const handleModalSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/clientes'] });
+  };
+
+  // Filtrar clientes localmente
+  const filteredClientes = clientes.filter(cliente => {
     const matchesSearch = cliente.nome.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "todos" || 
-      (statusFilter === "ativo" && cliente.indAtivo) ||
-      (statusFilter === "inativo" && !cliente.indAtivo);
+      (statusFilter === "ativo" && cliente.ind_ativo) ||
+      (statusFilter === "inativo" && !cliente.ind_ativo);
     return matchesSearch && matchesStatus;
   });
 
@@ -34,7 +96,7 @@ export default function Clientes() {
           <h1 className="text-3xl font-bold">Clientes</h1>
           <p className="text-muted-foreground">Gerencie seus clientes</p>
         </div>
-        <Button data-testid="button-add-cliente" onClick={() => console.log('Add cliente clicked')}>
+        <Button data-testid="button-add-cliente" onClick={handleNovoCliente}>
           <Plus className="mr-2 h-4 w-4" />
           Novo Cliente
         </Button>
@@ -73,13 +135,43 @@ export default function Clientes() {
       <Card>
         <CardHeader>
           <CardTitle>
-            {filteredClientes.length} {filteredClientes.length === 1 ? 'cliente' : 'clientes'}
+            {isLoading ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Carregando clientes...
+              </div>
+            ) : (
+              <>
+                {filteredClientes.length} {filteredClientes.length === 1 ? 'cliente' : 'clientes'}
+              </>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ClienteTable clientes={filteredClientes} />
+          {isLoading ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Carregando...
+            </div>
+          ) : filteredClientes.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Nenhum cliente encontrado
+            </div>
+          ) : (
+            <ClienteTable
+              clientes={filteredClientes}
+              onEditar={handleEditarCliente}
+              onToggleStatus={handleToggleStatus}
+            />
+          )}
         </CardContent>
       </Card>
+
+      <ModalCliente
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSuccess={handleModalSuccess}
+        cliente={clienteParaEditar}
+      />
     </div>
   );
 }

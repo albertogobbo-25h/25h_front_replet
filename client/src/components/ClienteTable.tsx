@@ -1,22 +1,17 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Trash2, Phone } from "lucide-react";
-
-interface Cliente {
-  id: string;
-  nome: string;
-  whatsapp?: string;
-  indAtivo: boolean;
-}
+import { Edit, Power, Phone } from "lucide-react";
+import { formatWhatsApp } from "@/lib/masks";
+import type { Cliente } from "@/types/cliente";
 
 interface ClienteTableProps {
   clientes: Cliente[];
-  onEdit?: (id: string) => void;
-  onDelete?: (id: string) => void;
+  onEditar?: (cliente: Cliente) => void;
+  onToggleStatus?: (cliente: Cliente) => void;
 }
 
-export default function ClienteTable({ clientes, onEdit, onDelete }: ClienteTableProps) {
+export default function ClienteTable({ clientes, onEditar, onToggleStatus }: ClienteTableProps) {
   return (
     <div className="border rounded-md">
       <Table>
@@ -31,20 +26,25 @@ export default function ClienteTable({ clientes, onEdit, onDelete }: ClienteTabl
         <TableBody>
           {clientes.map((cliente) => (
             <TableRow key={cliente.id} data-testid={`row-cliente-${cliente.id}`}>
-              <TableCell className="font-medium" data-testid={`text-cliente-nome-${cliente.id}`}>
-                {cliente.nome}
+              <TableCell data-testid={`text-cliente-nome-${cliente.id}`}>
+                <div>
+                  <p className="font-medium">{cliente.nome}</p>
+                  {cliente.nome_visualizacao && cliente.nome_visualizacao !== cliente.nome && (
+                    <p className="text-xs text-muted-foreground">"{cliente.nome_visualizacao}"</p>
+                  )}
+                </div>
               </TableCell>
               <TableCell>
                 {cliente.whatsapp && (
                   <div className="flex items-center gap-1">
-                    <Phone className="h-3 w-3" />
-                    <span className="font-mono text-sm">{cliente.whatsapp}</span>
+                    <Phone className="h-3 w-3 text-muted-foreground" />
+                    <span className="font-mono text-sm">{formatWhatsApp(cliente.whatsapp)}</span>
                   </div>
                 )}
               </TableCell>
               <TableCell>
-                <Badge variant={cliente.indAtivo ? "secondary" : "outline"}>
-                  {cliente.indAtivo ? "Ativo" : "Inativo"}
+                <Badge variant={cliente.ind_ativo ? "secondary" : "outline"}>
+                  {cliente.ind_ativo ? "Ativo" : "Inativo"}
                 </Badge>
               </TableCell>
               <TableCell className="text-right">
@@ -52,24 +52,20 @@ export default function ClienteTable({ clientes, onEdit, onDelete }: ClienteTabl
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => {
-                      console.log('Edit cliente:', cliente.id);
-                      onEdit?.(cliente.id);
-                    }}
+                    onClick={() => onEditar?.(cliente)}
                     data-testid={`button-edit-cliente-${cliente.id}`}
+                    title="Editar cliente"
                   >
                     <Edit className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => {
-                      console.log('Delete cliente:', cliente.id);
-                      onDelete?.(cliente.id);
-                    }}
-                    data-testid={`button-delete-cliente-${cliente.id}`}
+                    onClick={() => onToggleStatus?.(cliente)}
+                    data-testid={`button-toggle-status-cliente-${cliente.id}`}
+                    title={cliente.ind_ativo ? "Desativar cliente" : "Ativar cliente"}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Power className={`h-4 w-4 ${cliente.ind_ativo ? 'text-destructive' : 'text-green-600'}`} />
                   </Button>
                 </div>
               </TableCell>

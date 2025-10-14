@@ -1,0 +1,624 @@
+# Fluxo de Gestão de Assinatura - 25h.com.br
+
+## Diagrama de Fluxo
+
+```mermaid
+flowchart TD
+  subgraph UI
+    A[Usuário abre Tela: Gestão de Assinatura]
+  end
+
+  A --> B[public.listar_assinaturas incluir_historico?]
+  B --> C{Tem assinaturas?}
+  C -- Não --> D[Mostrar CTA: escolher plano<br/>public.listar_planos_assinatura false]
+  C -- Sim --> E[Listar: Ativa, Aguardando Pagamento, Suspensa, Cancelada histórico]
+
+  %% Ações na lista
+  E --> F1[Pagar na Pendente]
+  E --> F2[Mudar plano]
+  E --> F3[Cancelar Ativa]
+  E --> F4[Cancelar Pendente]
+  E --> F5[Pagar mensalidade quando Suspensa]
+
+  %% Pagar pendente
+  F1 --> G1[Edge Function: iniciar_pagto_assinante<br/>cobranca_id, meio_pagamento]
+  G1 --> H1[Retorna link da Pluggy para consentimento]
+  H1 --> I1[Usuário acessa link e autoriza pagamento]
+  I1 --> J1[Pluggy processa e chama webhook]
+
+  %% Mudar plano
+  F2 --> G2[public.criar_nova_assinatura<br/>plano_id, periodicidade<br/>cria Assinatura Pendente + Cobrança]
+  G2 --> H2[Voltar à lista: mostrar Ativa + Nova Pendente]
+
+  %% Cancelamentos
+  F3 --> V1[public.cancelar_assinatura<br/>assinatura_id<br/>⚠️ NÃO IMPLEMENTADO]
+  F4 --> V2[public.cancelar_assinatura<br/>assinatura_id<br/>⚠️ NÃO IMPLEMENTADO]
+  
+  V1 --> G3[status = Cancelada]
+  V2 --> G4[status = Cancelada<br/>cancelar cobrança se Em aberto]
+
+  %% Suspensa (vencida)
+  F5 --> G5[public.criar_nova_assinatura<br/>novo ciclo<br/>cria Pendente + Cobrança]
+
+  %% N8N webhook
+  subgraph Webhook
+    I[N8N recebe confirmação de pagamento<br/>Edge Function: webhook_status_cobranca]
+    I --> J[app_internal.fn_processar_webhook_pagamento_saas<br/>payload]
+    J --> K{Idempotência ok?}
+    K -- não --> L[200 already processed]
+    K -- sim --> M[BEGIN]
+    M --> N[Marcar cobrança = Pago, set dthr_pagamento]
+    N --> O{Existe assinatura ATIVA anterior?}
+    O -- sim --> P[Cancelar assinatura ativa anterior]
+    P --> Q[Ativar nova assinatura]
+    O -- não --> Q[Ativar nova assinatura]
+    Q --> R[Calcular data_validade da nova]
+    R --> S[COMMIT]
+    S --> T[Notificar assinante]
+  end
+
+%% Regras de cálculo R
+%% - Se havia ATIVA com validade futura: nova.data_inicio = antiga.data_validade + 1 dia; nova.data_validade = antiga.data_validade + período
+%% - Caso contrário: nova.data_inicio = hoje; nova.data_validade = hoje + período
+
+%% Observações
+%% - Só deve existir, no máximo, 1 assinatura "Aguardando pagamento" por assinante de cada vez regra implementada
+%% - Cancelar Pendente deve cancelar a cobrança vinculada se ainda "Em aberto"
+%% - Idempotência do webhook baseada em chave única por evento do gateway
+```
+
+## Regras de negócio essenciais
+
+- **Coexistência**: pode haver uma assinatura ATIVA e, simultaneamente, uma nova PENDENTE (mudança de plano ou renovação).
+- **Ativação por pagamento**: ao confirmar pagamento, a PENDENTE vira ATIVA e a antiga ATIVA (se houver) é cancelada.
+- **Projeção de validade**: 
+  - Se há assinatura ATIVA **não-gratuita**: nova validade = antiga.data_validade + período
+  - Se há assinatura ATIVA **gratuita** ou nenhuma: nova validade = hoje + período
+- **Criação de assinatura**: assinante pode criar nova assinatura a qualquer momento (gratuito expirado ou não).
+- **Cancelamento**: assinante pode cancelar ATIVA ou PENDENTE; ao cancelar PENDENTE, cancelar cobrança em aberto.
+- **Suspensa**: quando vence; usuário pode iniciar novo ciclo gerando PENDENTE + cobrança.
+- **Idempotência**: webhook deve ser idempotente (repetições retornam 200 sem efeitos colaterais).
+
+## Funções Backend - Referência Completa
+
+### 📋 **1. Listar Planos de Assinatura**
+
+**Função:** `public.listar_planos_assinatura(p_incluir_gratuito BOOLEAN)`
+
+**Status:** ✅ Implementado
+
+**Descrição:** Lista todos os planos de assinatura disponíveis
+
+**Parâmetros:**
+- `p_incluir_gratuito` (default: `true`): Se deve incluir planos gratuitos na listagem
+
+**Retorno:** `TABLE` com colunas:
+```sql
+id SMALLINT,
+titulo TEXT,
+descricao TEXT,
+ind_gratuito BOOLEAN,
+valor_mensal NUMERIC(10, 2),
+valor_anual NUMERIC(10, 2),
+valor_mensal_com_desconto NUMERIC(10, 2),
+valor_anual_com_desconto NUMERIC(10, 2),
+limite_clientes_ativos SMALLINT,
+dias_degustacao SMALLINT,
+features JSONB
+```
+
+**Exemplo de uso (Frontend):**
+```typescript
+// Listar apenas planos pagos (para upgrade)
+const { data: planos } = await supabase
+  .rpc('listar_planos_assinatura', { p_incluir_gratuito: false })
+
+// Listar todos os planos
+const { data: todosPlanos } = await supabase
+  .rpc('listar_planos_assinatura')
+```
+
+---
+
+### 📋 **2. Listar Assinaturas do Assinante**
+
+**Função:** `public.listar_assinaturas(p_incluir_historico BOOLEAN)`
+
+**Status:** ✅ Implementado
+
+**Descrição:** Lista assinaturas do assinante logado (ATIVA, PENDENTE, SUSPENSA e opcionalmente CANCELADA)
+
+**Parâmetros:**
+- `p_incluir_historico` (default: `false`): Se deve incluir assinaturas CANCELADAS
+
+**Retorno:** `JSONB`
+```json
+{
+  "status": "OK | ERROR",
+  "code": "ERROR_CODE (se erro)",
+  "message": "Mensagem de erro (se erro)",
+  "data": [
+    {
+      "assinatura_id": "uuid",
+      "status": "ATIVA | AGUARDANDO_PAGAMENTO | SUSPENSA | CANCELADA",
+      "periodicidade": "MENSAL | ANUAL",
+      "data_inicio": "date",
+      "data_validade": "date",
+      "plano": {
+        "id": "number",
+        "titulo": "string",
+        "ind_gratuito": "boolean"
+      },
+      "cobranca_em_aberto": {
+        "id": "uuid",
+        "valor": "number",
+        "data_vencimento": "date",
+        "status": "EM_ABERTO",
+        "link_pagamento": "string | null"
+      } | null
+    }
+  ]
+}
+```
+
+**Exemplo de uso (Frontend):**
+```typescript
+// Listar assinaturas ativas/pendentes/suspensas
+const { data } = await supabase
+  .rpc('listar_assinaturas', { p_incluir_historico: false })
+
+// Incluir histórico (canceladas)
+const { data: comHistorico } = await supabase
+  .rpc('listar_assinaturas', { p_incluir_historico: true })
+```
+
+---
+
+### 📋 **3. Criar Nova Assinatura**
+
+**Função:** `public.criar_nova_assinatura(p_plano_id SMALLINT, p_periodicidade enum_assinatura_periodicidade)`
+
+**Status:** ✅ Implementado
+
+**Descrição:** Cria nova assinatura (migração de gratuito para pago ou upgrade/renovação)
+
+**Parâmetros:**
+- `p_plano_id`: ID do plano escolhido
+- `p_periodicidade` (default: `'MENSAL'`): Periodicidade da assinatura (`'MENSAL'` ou `'ANUAL'`)
+
+**Validações:**
+- ✅ Assinante deve ter dados completos (nome, cpf_cnpj, tipo_pessoa, email)
+- ✅ Plano deve existir, estar ativo e não ser gratuito
+- ✅ Não pode haver outra assinatura AGUARDANDO_PAGAMENTO
+- ✅ Plano deve suportar a periodicidade escolhida
+
+**Retorno:** `JSONB`
+```json
+{
+  "status": "OK | ERROR",
+  "code": "ERROR_CODE (se erro)",
+  "message": "Mensagem",
+  "data": {
+    "assinatura": {
+      "id": "uuid",
+      "status": "AGUARDANDO_PAGAMENTO",
+      "data_inicio": "date",
+      "data_validade": "date",
+      "periodicidade": "MENSAL | ANUAL"
+    },
+    "plano": {
+      "id": "number",
+      "titulo": "string",
+      "descricao": "string"
+    },
+    "cobranca": {
+      "id": "uuid",
+      "valor": "number",
+      "data_vencimento": "date",
+      "status": "EM_ABERTO"
+    },
+    "assinatura_atual": {
+      "id": "uuid",
+      "plano_titulo": "string",
+      "data_validade": "date",
+      "status": "ATIVA"
+    } | null
+  }
+}
+```
+
+**Lógica de Cálculo de Datas:**
+- Se há assinatura ATIVA não-gratuita: `nova.data_inicio = antiga.data_validade + 1 dia`
+- Senão: `nova.data_inicio = hoje`
+- `nova.data_validade = data_inicio + período - 1 dia`
+
+**Exemplo de uso (Frontend):**
+```typescript
+const { data } = await supabase
+  .rpc('criar_nova_assinatura', {
+    p_plano_id: 2,
+    p_periodicidade: 'MENSAL'
+  })
+
+if (data.status === 'OK') {
+  const cobrancaId = data.data.cobranca.id
+  // Próximo passo: iniciar pagamento
+}
+```
+
+---
+
+### 💳 **4. Iniciar Pagamento de Cobrança**
+
+**Função:** **Edge Function** `iniciar_pagto_assinante`
+
+**Status:** ✅ Implementado
+
+**Descrição:** Inicia processo de pagamento via Pluggy (N8N)
+
+**Método:** `POST`
+
+**URL:** `/functions/v1/iniciar_pagto_assinante`
+
+**Headers:**
+```
+Authorization: Bearer {USER_JWT_TOKEN}
+Content-Type: application/json
+```
+
+**Body:**
+```json
+{
+  "cobranca_id": "uuid",
+  "meio_pagamento": "OPF_PIX_IMEDIATO | OPF_PIX_AUTOMATICO"
+}
+```
+
+**Validações:**
+- ✅ Usuário autenticado
+- ✅ Cobrança existe e pertence ao assinante
+- ✅ Cobrança está com status `EM_ABERTO`
+- ✅ Assinatura está com status `AGUARDANDO_PAGAMENTO`
+- ✅ Dados do assinante completos (nome, email, cpf_cnpj, tipo_pessoa, whatsapp)
+- ✅ Gateway status permite nova tentativa
+
+**Comportamento:**
+1. Valida dados do assinante e cobrança
+2. Busca ou cria pagador no Pluggy (fallback automático)
+3. Cria requisição de pagamento via N8N
+4. Registra inicialização no banco (transação atômica)
+5. Retorna link de pagamento da Pluggy
+
+**Retorno:** `JSONB`
+```json
+{
+  "status": "OK | ERROR | WARNING",
+  "message": "string",
+  "data": {
+    "pluggy": {
+      "id": "string",
+      "paymentUrl": "string",
+      "status": "string",
+      "description": "string"
+    },
+    "database": {
+      "initialization": {},
+      "cobranca_id": "uuid",
+      "assinatura_id": "uuid",
+      "request_id": "string",
+      "atomic_transaction": true
+    }
+  },
+  "warnings": ["string"] // se houver
+}
+```
+
+**Exemplo de uso (Frontend):**
+```typescript
+const { data, error } = await supabase.functions.invoke(
+  'iniciar_pagto_assinante',
+  {
+    body: {
+      cobranca_id: 'uuid-da-cobranca',
+      meio_pagamento: 'OPF_PIX_AUTOMATICO'
+    }
+  }
+)
+
+if (data.status === 'OK') {
+  const paymentUrl = data.data.pluggy.paymentUrl
+  window.open(paymentUrl, '_blank') // Redirecionar para Pluggy
+}
+```
+
+---
+
+### 🪝 **5. Webhook de Status de Pagamento**
+
+**Função:** **Edge Function** `webhook_status_cobranca`
+
+**Status:** ✅ Implementado
+
+**Descrição:** Recebe notificações de status de pagamento do Pluggy via N8N
+
+**Método:** `POST`
+
+**URL:** `/functions/v1/webhook_status_cobranca`
+
+**Headers:**
+```
+X-N8N-Token: {N8N_API_KEY}
+Content-Type: application/json
+```
+
+**Body:**
+```json
+{
+  "eventId": "string",
+  "event": "string",
+  "paymentRequestId": "string",
+  "paymentIntentId": "string",
+  "automaticPixPaymentId": "string",
+  "status": "SUCCESS | FAILED | EXPIRED | ...",
+  "endToEndId": "string"
+}
+```
+
+**Comportamento:**
+1. Valida token do N8N
+2. Identifica contexto (SAAS ou ASSINANTE)
+3. Delega para `app_internal.fn_processar_webhook_pagamento_saas()`
+4. Função interna processa (transação atômica):
+   - Verifica idempotência
+   - Atualiza status da cobrança
+   - Se pagamento confirmado: ativa nova assinatura e cancela anterior
+   - Calcula data de validade
+   - Registra log de eventos
+
+**Idempotência:** Baseada em `eventId` único
+
+**Retorno:**
+```json
+{
+  "status": "OK | ERROR",
+  "message": "string",
+  "data": {}
+}
+```
+
+---
+
+### 🗑️ **6. Cancelar Assinatura**
+
+**Função:** `public.cancelar_assinatura(p_assinatura_id UUID)`
+
+**Status:** ❌ **NÃO IMPLEMENTADO** (existe apenas validação interna)
+
+**Descrição:** Cancela assinatura e suas cobranças em aberto
+
+**Função Auxiliar (implementada):**
+- `app_internal.fn_validar_cancelamento_assinatura(p_assinatura_id UUID)` ✅ Implementado
+
+**Validações Implementadas:**
+- ✅ Assinatura não está cancelada
+- ✅ Verifica PIX Automático ativo (mandate)
+- ✅ Valida deadline de cobranças PIX Automático (22h do dia anterior)
+- ✅ Valida status de cobranças PIX Imediato
+
+**Retorno da Validação:** `JSONB`
+```json
+{
+  "pode_cancelar": "boolean",
+  "precisa_pluggy": "boolean",
+  "tem_pix_automatico": "boolean",
+  "payment_request_id": "string | null",
+  "total_cobrancas_problematicas": "number",
+  "total_cobrancas_cancelaveis": "number",
+  "cobrancas_problematicas": [],
+  "cobrancas_cancelaveis": [],
+  "mensagem": "string"
+}
+```
+
+**⚠️ PENDENTE:** Implementar função pública `public.cancelar_assinatura()` que:
+1. Chama `fn_validar_cancelamento_assinatura()`
+2. Se `pode_cancelar = false`, retorna erro
+3. Se `precisa_pluggy = true`:
+   - Chama N8N para cancelar mandate/cobranças na Pluggy
+   - Aguarda confirmação
+4. Atualiza status da assinatura para `CANCELADA`
+5. Cancela cobranças em aberto
+
+---
+
+### 👤 **7. Gerenciar Dados do Assinante**
+
+#### 7.1 Obter Dados
+
+**Função:** `public.obter_dados_assinante()`
+
+**Status:** ✅ Implementado
+
+**Retorno:** `JSONB`
+```json
+{
+  "status": "OK | ERROR",
+  "data": {
+    "id": "uuid",
+    "nome": "string",
+    "nome_fantasia": "string",
+    "cpf_cnpj": "string",
+    "tipo_pessoa": "FISICA | JURIDICA",
+    "email": "string",
+    "whatsapp": "string",
+    "rua": "string",
+    "numero": "string",
+    "complemento": "string",
+    "bairro": "string",
+    "cidade": "string",
+    "uf": "string",
+    "cep": "string"
+  }
+}
+```
+
+#### 7.2 Atualizar Dados
+
+**Função:** `public.atualizar_dados_assinante(...)`
+
+**Status:** ✅ Implementado
+
+**Parâmetros:** Todos opcionais (atualiza apenas os fornecidos)
+- `p_nome TEXT`
+- `p_nome_fantasia TEXT`
+- `p_rua TEXT`
+- `p_numero TEXT`
+- `p_complemento TEXT`
+- `p_bairro TEXT`
+- `p_cidade TEXT`
+- `p_uf CHAR(2)`
+- `p_cep VARCHAR(10)`
+- `p_cpf_cnpj VARCHAR(20)`
+- `p_tipo_pessoa enum_tipo_pessoa`
+- `p_email TEXT`
+- `p_whatsapp TEXT`
+
+**Validações:**
+- ✅ Email válido
+- ✅ WhatsApp válido (formato brasileiro)
+- ✅ CEP válido
+- ✅ UF válida
+- ✅ CPF/CNPJ consistente com tipo_pessoa
+
+**Retorno:** `JSONB`
+```json
+{
+  "status": "OK | ERROR",
+  "message": "string",
+  "data": {
+    // dados atualizados
+  }
+}
+```
+
+---
+
+## Resumo de Implementação
+
+### ✅ **Implementado e Funcionando:**
+1. ✅ `public.listar_planos_assinatura()` 
+2. ✅ `public.listar_assinaturas()`
+3. ✅ `public.criar_nova_assinatura()`
+4. ✅ **Edge Function** `iniciar_pagto_assinante`
+5. ✅ **Edge Function** `webhook_status_cobranca`
+6. ✅ `public.obter_dados_assinante()`
+7. ✅ `public.atualizar_dados_assinante()`
+8. ✅ `app_internal.fn_validar_cancelamento_assinatura()`
+9. ✅ `app_internal.fn_processar_webhook_pagamento_saas()`
+10. ✅ `app_internal.fn_crud_assinatura_*` (CRUD completo)
+11. ✅ `app_internal.fn_crud_assinatura_cobranca_*` (CRUD completo)
+
+### ❌ **Pendente de Implementação:**
+1. ❌ `public.cancelar_assinatura(p_assinatura_id)` — **PRIORIDADE ALTA**
+   - Já tem validação implementada
+   - Falta implementar a função pública que orquestra o cancelamento
+   - Precisa integrar com N8N/Pluggy para cancelar mandate e cobranças
+
+## Estado atual da implementação
+
+### ✅ Implementado:
+- Estrutura básica das tabelas `assinatura` e `assinatura_cobranca`
+- Enums para status e periodicidade
+- Funções CRUD básicas para assinaturas e cobranças
+- Função `listar_planos_assinatura()` para exibir planos disponíveis
+- Função `fn_assinatura_ler_valida()` para validar assinatura atual
+- Campo `id_cobranca_gateway` (equivale ao `gateway_payment_id`)
+- **Constraint única**: Máximo 1 assinatura "Aguardando pagamento" por assinante
+- **Auditoria padronizada**: Colunas `criado_por`, `criado_em`, `modificado_em`
+- **Tipos de dados consistentes**: `TIMESTAMPTZ` para instantes, `DATE` para datas lógicas
+- **RLS unificado**: Todas as políticas usam `app_internal.current_assinante_id()`
+
+### 🔄 Próximo passo:
+- Implementar função `criar_nova_assinatura()` para migração gratuito → pago
+- Implementar regras de negócio de coexistência e cálculo de datas
+
+#### Função `criar_nova_assinatura()` - Especificação:
+```sql
+CREATE OR REPLACE FUNCTION public.criar_nova_assinatura(
+    p_plano_id SMALLINT,
+    p_periodicidade public.enum_assinatura_periodicidade DEFAULT 'Mensal'
+)
+RETURNS JSONB
+```
+
+**Validações:**
+1. Verificar se não há assinatura pendente já existente
+2. Validar se plano escolhido existe e está ativo
+3. Verificar se assinante está autenticado
+
+**Ações:**
+1. Criar nova assinatura com status "Aguardando pagamento"
+2. Calcular `data_inicio` e `data_validade` conforme regras:
+   - **Se há assinatura ATIVA não-gratuita**: nova.data_inicio = antiga.data_validade + 1 dia
+   - **Se há assinatura ATIVA gratuita ou nenhuma assinatura**: nova.data_inicio = hoje
+   - **data_validade**: data_inicio + período do plano escolhido
+3. Criar cobrança vinculada com valor do plano
+4. Retornar dados para frontend (IDs, valores, instruções)
+
+**Regras de negócio:**
+- Assinante pode criar nova assinatura mesmo com plano gratuito expirado
+- Se há assinatura ATIVA (gratuita ou paga), mantém ativa até nova ser paga
+- Cálculo de datas só considera assinatura anterior se for não-gratuita
+
+### ⏳ Para integração com N8N/Pluggy:
+- `assinatura_cobranca` campos de integração: `gateway_consent_id`, `gateway_mandate_id` (opcional), `idempotency_key` (UNIQUE), `dthr_pagamento`
+- `assinatura.gateway_consent_id` (TEXT): para Pix Automático
+- RLS: assinante só acessa suas `assinatura` e `assinatura_cobranca`
+
+## Melhorias de Performance Implementadas
+
+### **Estratégias de Identificação**
+- **Tabelas de alto volume**: `assinatura` e `assinatura_cobranca` usam `BIGINT IDENTITY` para máxima performance
+- **Tabelas de configuração**: `cfg_planos_assinatura` usa `UUID` com `app_internal.gen_uuid_v7()` para ordenabilidade
+- **Relacionamentos N:N**: `evento_cliente` e `evento_recorrente_cliente` com chave primária composta
+
+### **Integridade de Dados**
+- **Constraint única**: `usuario_funcao` com constraint única `(usuario_id, funcao)` para evitar duplicidades
+- **Índice único**: Assinaturas pendentes com índice único para prevenir múltiplas assinaturas em aberto por assinante
+- **Auditoria padronizada**: Colunas de auditoria unificadas (`criado_por`, `criado_em`, `modificado_em`)
+
+### **Segurança e Consistência**
+- **RLS unificado**: Todas as políticas RLS usam `app_internal.current_assinante_id()` para maior confiabilidade
+- **Tipos de dados consistentes**: Padronização de `TIMESTAMPTZ` para instantes e `DATE` para datas lógicas
+- **Limpeza de código**: Remoção de sobrecargas antigas de funções CRUD
+
+### Lógica do gateway_consent_id (futuro):
+- **Pix Automático**: preenchido em ambas as tabelas (assinatura + cobrança)
+- **Pix Imediato**: só na cobrança, null na assinatura
+
+## Observabilidade e confiabilidade
+
+- Logs estruturados nas funções (criação/ativação/cancelamento) e no webhook.
+- Auditoria de mudanças de status (já coberta por triggers de auditoria, se habilitadas).
+- Métricas: taxa de conversão PENDENTE->ATIVA, cancelamentos, falhas de pagamento.
+
+## Integração com Gateway (Pagador/Recebedor)
+
+- Recebedor (SaaS): já cadastrado manualmente no gateway; armazenado em `gateway_saas_recebedor` (provider, external_id, status?, metadata?).
+- Pagador (Assinante): pode ser criado on-the-fly na mesma chamada de criação da cobrança via N8N/Pluggy.
+  - Tabela sugerida: `gateway_assinante_pagador` com colunas: `assinante_id` (FK), `gateway_payer_id` (TEXT UNIQUE), `provider` (TEXT/ENUM), `criado_em`, `atualizado_em`, `status?`, `metadata?`.
+  - Fluxo: ao iniciar pagamento (POST), enviar `gateway_payer_id` se existir; se não, enviar dados do pagador. O N8N cria o pagador no gateway e, em seguida, cria a cobrança; a resposta retorna `gateway_payment_id` e o `gateway_payer_id`, que devem ser persistidos.
+  - Relacionamento com cobranças: cada `assinatura_cobranca` referencia o pagador implicitamente via `assinante_id`; opcional armazenar `gateway_payer_id` na cobrança para auditoria.
+
+Chamadas ao N8N (uma única chamada):
+- Requisição: `{ cobranca: { valor, tipo_pagamento? }, pagador: { id? | dados_pessoais } }`
+- Resposta: `{ gateway_payment_id, gateway_payer_id, gateway_consent_id? }`
+
+Endereçamento nos endpoints:
+- POST `/assinaturas` e POST `/pagamentos/:cobrancaId/...` devem garantir a existência do pagador no gateway (create-if-missing) antes de criar consentimento ou iniciar pagamento.
+
+### Convenção de nomes (tabelas de gateway)
+
+- `gateway_saas_recebedor`: id do recebedor do SaaS no provider.
+- `gateway_assinante_pagador`: id do pagador do assinante no provider.
+- `gateway_assinante_recebedor`: usar no futuro apenas se o assinante também atuar como recebedor (marketplace/split).
