@@ -1,0 +1,136 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS'
+};
+const jsonHeaders = {
+  ...corsHeaders,
+  'Content-Type': 'application/json; charset=utf-8'
+};
+function logWeb(level, message, context) {
+  const payload = {
+    level,
+    message,
+    ...context && {
+      context
+    }
+  };
+  switch(level){
+    case 'WARN':
+      console.warn('[cancelar_assinatura]', JSON.stringify(payload));
+      break;
+    case 'ERROR':
+      console.error('[cancelar_assinatura]', JSON.stringify(payload));
+      break;
+    default:
+      console.log('[cancelar_assinatura]', JSON.stringify(payload));
+  }
+}
+function createErrorResponse(code, message, status, extraData) {
+  return new Response(JSON.stringify({
+    status: 'ERROR',
+    code,
+    message,
+    ...extraData
+  }), {
+    status,
+    headers: jsonHeaders
+  });
+}
+function createSuccessResponse(payload) {
+  return new Response(JSON.stringify({
+    status: 'OK',
+    ...payload
+  }), {
+    status: 200,
+    headers: jsonHeaders
+  });
+}
+Deno.serve(async (req)=>{
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', {
+      headers: corsHeaders
+    });
+  }
+  if (req.method !== 'POST') {
+    return createErrorResponse('METHOD_NOT_ALLOWED', 'Use POST', 405);
+  }
+  try {
+    const body = await req.json();
+    const assinaturaId = body.assinatura_id;
+    const motivo = body.motivo || 'solicitacao_usuario';
+    if (!assinaturaId) {
+      return createErrorResponse('MISSING_PARAMS', 'assinatura_id obrigatório', 400);
+    }
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const n8nUrl = Deno.env.get('N8N_CANCELAR_ASSINATURA');
+    const n8nToken = Deno.env.get('N8N_API_KEY');
+    if (!supabaseUrl || !serviceRoleKey) {
+      return createErrorResponse('MISSING_ENV', 'SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY ausentes', 500);
+    }
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    logWeb('INFO', 'Cancelando assinatura', {
+      assinatura_id: assinaturaId
+    });
+    const { data: resultado, error } = await supabase.rpc('fn_cancelar_assinatura', {
+      p_assinatura_id: assinaturaId,
+      p_motivo: motivo
+    });
+    if (error) {
+      logWeb('ERROR', 'Erro ao cancelar assinatura via RPC', {
+        error
+      });
+      return createErrorResponse('RPC_ERROR', error.message || 'Erro ao cancelar assinatura', 500);
+    }
+    logWeb('INFO', 'Cancelamento processado no banco', resultado);
+    if (resultado?.precisa_pluggy) {
+      if (!n8nUrl || !n8nToken) {
+        logWeb('ERROR', 'N8N_CANCELAR_ASSINATURA ou N8N_API_KEY ausentes', {
+          assinatura_id: assinaturaId
+        });
+      } else {
+        logWeb('INFO', 'Disparando cancelamento na Pluggy (fire-and-forget)', {
+          n8n_url: n8nUrl,
+          assinatura_id: assinaturaId
+        });
+        fetch(n8nUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-N8N-Token': n8nToken
+          },
+          body: JSON.stringify(resultado.payload_n8n)
+        }).then((res)=>{
+          if (res.ok) {
+            logWeb('INFO', 'N8N chamado com sucesso', {
+              assinatura_id: assinaturaId
+            });
+          } else {
+            logWeb('ERROR', 'N8N retornou erro', {
+              status: res.status,
+              assinatura_id: assinaturaId
+            });
+          }
+        }).catch((err)=>{
+          logWeb('ERROR', 'Erro ao chamar N8N (ignorado, job cron processará)', {
+            assinatura_id: assinaturaId,
+            error: err?.message
+          });
+        });
+      }
+    }
+    return createSuccessResponse({
+      message: resultado?.message,
+      status_final: resultado?.status_final,
+      precisa_pluggy: resultado?.precisa_pluggy
+    });
+  } catch (error) {
+    logWeb('ERROR', 'Erro fatal ao processar cancelamento', {
+      message: error?.message,
+      stack: error?.stack
+    });
+    return createErrorResponse('INTERNAL_ERROR', error?.message || 'Erro ao processar cancelamento', 500);
+  }
+});

@@ -8,6 +8,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, Info, Loader2 } from "lucide-react";
 import type { Assinatura } from "@/types/assinatura";
@@ -17,7 +19,7 @@ interface ModalCancelamentoProps {
   open: boolean;
   onClose: () => void;
   assinatura: Assinatura;
-  onConfirmar: () => Promise<void>;
+  onConfirmar: (motivo?: string) => Promise<void>;
   isLoading?: boolean;
 }
 
@@ -29,13 +31,15 @@ export default function ModalCancelamento({
   isLoading = false,
 }: ModalCancelamentoProps) {
   const [internalLoading, setInternalLoading] = useState(false);
+  const [motivo, setMotivo] = useState("");
   
   const loading = isLoading || internalLoading;
 
   const handleConfirmar = async () => {
     setInternalLoading(true);
     try {
-      await onConfirmar();
+      await onConfirmar(motivo || undefined);
+      setMotivo(""); // Limpa o campo após confirmar
     } finally {
       setInternalLoading(false);
     }
@@ -88,6 +92,24 @@ export default function ModalCancelamento({
               </AlertDescription>
             </Alert>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="motivo" className="text-sm font-medium">
+              Motivo do cancelamento (opcional)
+            </Label>
+            <Textarea
+              id="motivo"
+              placeholder="Nos ajude a melhorar. Por que você está cancelando?"
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              disabled={loading}
+              rows={3}
+              data-testid="textarea-motivo-cancelamento"
+            />
+            <p className="text-xs text-muted-foreground">
+              Suas informações nos ajudam a aprimorar nossos serviços.
+            </p>
+          </div>
         </div>
 
         <DialogFooter>

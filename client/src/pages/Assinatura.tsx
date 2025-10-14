@@ -172,15 +172,43 @@ export default function AssinaturaPage() {
     },
   });
 
-  // Mutation: Cancelar assinatura
+  // Mutation: Cancelar assinatura via Edge Function
   const cancelarAssinaturaMutation = useMutation({
-    mutationFn: async (assinaturaId: string) => {
-      const { data, error } = await supabase.rpc('cancelar_assinatura', {
-        p_assinatura_id: assinaturaId,
+    mutationFn: async ({ assinaturaId, motivo }: { assinaturaId: string; motivo?: string }) => {
+      const { data: session } = await supabase.auth.getSession();
+      
+      if (!session?.session?.access_token) {
+        throw new Error('Sessão inválida. Faça login novamente.');
+      }
+
+      const edgeFunctionUrl = import.meta.env.VITE_SUPABASE_EDGE_CANCELAR_ASSINATURA;
+      
+      if (!edgeFunctionUrl) {
+        throw new Error('URL da Edge Function não configurada.');
+      }
+
+      const response = await fetch(edgeFunctionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.session.access_token}`,
+        },
+        body: JSON.stringify({
+          assinatura_id: assinaturaId,
+          motivo: motivo || 'solicitacao_usuario',
+        }),
       });
 
-      if (error) throw error;
-      if (data?.status === 'ERROR') throw new Error(data.message);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erro ao cancelar assinatura');
+      }
+
+      const data = await response.json();
+      
+      if (data.status === 'ERROR') {
+        throw new Error(data.message || 'Erro ao processar cancelamento');
+      }
 
       return data;
     },
@@ -247,10 +275,13 @@ export default function AssinaturaPage() {
   };
 
   // Função para cancelar assinatura
-  const handleCancelarAssinatura = async () => {
+  const handleCancelarAssinatura = async (motivo?: string) => {
     if (!assinaturaParaCancelar) return;
 
-    await cancelarAssinaturaMutation.mutateAsync(assinaturaParaCancelar.assinatura_id);
+    await cancelarAssinaturaMutation.mutateAsync({
+      assinaturaId: assinaturaParaCancelar.assinatura_id,
+      motivo,
+    });
   };
 
   const assinaturas = assinaturasData?.data || [];
