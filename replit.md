@@ -11,8 +11,8 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 ### UI/UX Decisions
 - **Color Scheme**: Professional blue (`hsl(217, 91%, 60%)`) as primary, with distinct colors for success, warning, and destructive actions.
 - **Typography**: Inter for general UI, Roboto Mono for financial values and dates.
-- **Components**: Utilizes `shadcn/ui` for standardized components like `DashboardKPICard`, `StatusBadge`, `ClienteTable`, `CobrancaTable`, `AppSidebar`, and `PlanCard`.
-- **Localization**: Full Brazilian Portuguese (R$, WhatsApp masks, date formats).
+- **Components**: Utilizes `shadcn/ui` for standardized components like `DashboardKPICard`, `StatusBadge`, `ClienteTable`, `CobrancaTable`, `AppSidebar`, `PlanCard`, `ModalCliente`, and `ModalPlanoCliente`.
+- **Localization**: Full Brazilian Portuguese (R$, WhatsApp masks, date formats, currency formatting).
 - **Design Principles**: Mobile-first responsive design, Dark mode support, Accessibility (WCAG AA contrast, visible labels, focus indicators).
 
 ### Technical Implementations
@@ -26,7 +26,21 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 ### Feature Specifications
 - **Authentication**: Login/Signup, onboarding with name and WhatsApp, automatic Free plan creation on signup, session management, route protection.
 - **Dashboard**: KPI cards (revenue, clients, charges), recent charges table, trend indicators.
-- **Client Management**: List clients with filters, table with actions, WhatsApp formatting.
+- **Client Management**: 
+  - List clients with filters (name, status: active/inactive)
+  - CRUD operations: create, read, update, activate/deactivate
+  - Client details: name, display name, WhatsApp (formatted), observation
+  - ModalCliente component with form validation and WhatsApp masking
+- **Client Plans Management** (NEW):
+  - Create and manage service plans for clients
+  - Three plan types with dynamic fields:
+    - VALOR_FIXO: Fixed recurring value with periodicity (monthly/quarterly/semi-annual/annual)
+    - PACOTE: Pre-paid package with fixed value and service quantity (non-recurring)
+    - VALOR_VARIAVEL: Variable value per service with periodicity
+  - Full CRUD operations: create, update, activate/deactivate, delete
+  - Plan details: name, description, type, values, quantity, periodicity
+  - ModalPlanoCliente with dynamic form fields based on plan type
+  - Integrated with Supabase RPCs: criar_cliente_plano, atualizar_cliente_plano, listar_cliente_planos, desativar_cliente_plano, reativar_cliente_plano, excluir_cliente_plano
 - **Charge Management**: List charges with filters (status, period), totals cards, status badges, view/send actions.
 - **Subscription**: Display current plan, pending payment actions, plan selection modal (monthly/annual), cadastral data validation, PIX payment integration via Pluggy, automatic status polling, upgrade/renewal/cancellation flows.
 - **Profile**: Personal data form (CNPJ only), optional full address, Brazilian masks.
