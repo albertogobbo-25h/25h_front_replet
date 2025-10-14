@@ -28,6 +28,7 @@ import { Link } from "wouter";
 const assinanteItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Clientes", url: "/clientes", icon: Users },
+  { title: "Planos", url: "/planos", icon: Package },
   { title: "Cobranças", url: "/cobrancas", icon: FileText },
   { title: "Assinatura", url: "/assinatura", icon: CreditCard },
   { title: "Perfil", url: "/perfil", icon: Settings },

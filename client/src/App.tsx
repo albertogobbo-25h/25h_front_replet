@@ -12,6 +12,7 @@ import OnboardingForm from "@/components/OnboardingForm";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Clientes from "@/pages/Clientes";
+import PlanosCliente from "@/pages/PlanosCliente";
 import Cobrancas from "@/pages/Cobrancas";
 import Assinatura from "@/pages/Assinatura";
 import Perfil from "@/pages/Perfil";
@@ -60,6 +61,7 @@ function Router() {
               <Route path="/" component={Dashboard} />
               <Route path="/dashboard" component={Dashboard} />
               <Route path="/clientes" component={Clientes} />
+              <Route path="/planos" component={PlanosCliente} />
               <Route path="/cobrancas" component={Cobrancas} />
               <Route path="/assinatura" component={Assinatura} />
               <Route path="/perfil" component={Perfil} />
