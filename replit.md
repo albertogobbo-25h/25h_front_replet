@@ -13,6 +13,12 @@ Sistema SaaS de gestão de cobranças com PIX automático via Pluggy, desenvolvi
   - Implemented CNPJ and CEP masks
   - Real-time data loading and saving with proper error handling
 - **Multi-tenancy Support**: All cliente and cliente_cobranca queries now properly use app_data schema
+- **Subscription Cancellation via Edge Function**:
+  - Integrated with Supabase Edge Function `cancelar_assinatura`
+  - Added optional cancellation reason field in ModalCancelamento
+  - Uses `supabase.functions.invoke()` for standardized Edge Function calls
+  - Automatic Pluggy integration for payment cancellation (fire-and-forget)
+  - Complete error handling and user feedback
 
 ## User Preferences
 I prefer simple language and clear, concise explanations. I want iterative development with frequent, small updates. Ask for my confirmation before making any major architectural changes or implementing new features. Ensure all new code adheres to the existing coding style and uses Brazilian Portuguese localization where applicable. Do not make changes to files or folders unless explicitly instructed.
@@ -90,6 +96,11 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 - **Data Formatting**: All cadastral data (e.g., CNPJ, WhatsApp) is unformatted (numbers only) before being sent to the backend and formatted for display on the frontend.
 - **Form Protection**: User input in critical forms like "Modal de Dados Cadastrais" is protected against accidental resets during re-renders or data loads by tracking user edits.
 - **Business Rule**: The system exclusively supports Pessoa Jurídica (CNPJ), removing the "Tipo de Pessoa" selection and enforcing CNPJ-specific fields and validations.
+- **Edge Functions**: All Supabase Edge Function calls use `supabase.functions.invoke()` method from the SDK instead of direct `fetch()` calls. This provides:
+  - Automatic URL resolution (no environment variables needed)
+  - Automatic authentication header injection
+  - Consistent error handling
+  - Example: `await supabase.functions.invoke('nome_funcao', { body: { ...params } })`
 
 ## External Dependencies
 - **Supabase**: Used for authentication (email/password, Google OAuth) and as the PostgreSQL database.
