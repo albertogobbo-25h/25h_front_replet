@@ -52,7 +52,12 @@ export function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function formatDate(dateString: string): string {
+export function formatDate(dateString: string | null | undefined): string {
+  // Validar entrada
+  if (!dateString) {
+    return '-';
+  }
+  
   // Extrair apenas a parte da data (YYYY-MM-DD) de qualquer formato
   // Remove tempo e timezone para evitar conversão UTC -> local
   const dateOnly = dateString.split('T')[0]; // Pega apenas YYYY-MM-DD
