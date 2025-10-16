@@ -10,6 +10,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import AppSidebar from "@/components/AppSidebar";
 import OnboardingForm from "@/components/OnboardingForm";
 import Login from "@/pages/Login";
+import ResetPassword from "@/pages/ResetPassword";
 import Dashboard from "@/pages/Dashboard";
 import Clientes from "@/pages/Clientes";
 import PlanosCliente from "@/pages/PlanosCliente";
@@ -17,9 +18,11 @@ import Cobrancas from "@/pages/Cobrancas";
 import Assinatura from "@/pages/Assinatura";
 import Perfil from "@/pages/Perfil";
 import NotFound from "@/pages/not-found";
+import { useLocation } from "wouter";
 
 function Router() {
   const { user, loading } = useAuth();
+  const [location] = useLocation();
   
   // Verificar se precisa de onboarding (usuário não tem nome salvo)
   const needsOnboarding = user && !user.user_metadata?.onboarding_completed;
@@ -33,6 +36,11 @@ function Router() {
         <div className="text-lg">Carregando...</div>
       </div>
     );
+  }
+
+  // Permitir acesso público à página de reset de senha
+  if (location === '/reset-password') {
+    return <ResetPassword />;
   }
 
   if (!user) {

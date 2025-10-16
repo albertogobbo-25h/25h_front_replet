@@ -14,6 +14,12 @@ export default function Login() {
   const [isSignup, setIsSignup] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+
+  // Fechar painel de recuperação quando alternar para signup
+  const handleToggleMode = () => {
+    setIsSignup(!isSignup);
+    setShowForgotPassword(false);
+  };
   const { signIn, signUp, signInWithGoogle } = useAuth();
   const { toast } = useToast();
 
@@ -245,7 +251,7 @@ export default function Login() {
           <div className="text-center text-sm">
             <button
               type="button"
-              onClick={() => setIsSignup(!isSignup)}
+              onClick={handleToggleMode}
               className="text-primary hover:underline"
               data-testid="button-toggle-auth-mode"
             >
