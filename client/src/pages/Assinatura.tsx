@@ -149,14 +149,39 @@ export default function AssinaturaPage() {
       return data;
     },
     onSuccess: (data) => {
-      const paymentUrl = data?.data?.pluggy?.paymentUrl;
+      // Debug logs (apenas em desenvolvimento)
+      if (import.meta.env.DEV) {
+        console.log('🔍 Resposta Edge Function iniciar_pagto_assinante:', JSON.stringify(data, null, 2));
+      }
+      
+      // Tentar diferentes campos possíveis para a URL de pagamento
+      const paymentUrl = 
+        data?.data?.pluggy?.paymentUrl || 
+        data?.data?.pluggy?.qrCodeUrl ||
+        data?.data?.pluggy?.pixUrl ||
+        data?.data?.paymentUrl ||
+        data?.data?.qrCodeUrl ||
+        data?.data?.url;
+
+      if (import.meta.env.DEV) {
+        console.log('💳 Payment URL encontrada:', paymentUrl ? 'Sim' : 'Não');
+      }
 
       if (paymentUrl) {
         window.open(paymentUrl, '_blank');
         toast({
           title: 'Pagamento iniciado',
           description:
-            'Você será redirecionado para a Pluggy. Após o pagamento, sua assinatura será ativada automaticamente.',
+            'Você será redirecionado para realizar a autorização do PIX. Após o pagamento, sua assinatura será ativada automaticamente.',
+        });
+      } else {
+        if (import.meta.env.DEV) {
+          console.warn('⚠️ Nenhuma URL de pagamento encontrada na resposta');
+        }
+        toast({
+          title: 'Atenção',
+          description: 'Pagamento processado, mas não foi possível abrir a página de pagamento.',
+          variant: 'default',
         });
       }
 
@@ -300,7 +325,6 @@ export default function AssinaturaPage() {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-2xl">Plano Atual</CardTitle>
                     <div className="flex items-center gap-3">
-                      <span className="text-sm text-muted-foreground font-medium">Status:</span>
                       <div className="scale-150 origin-right">
                         <StatusBadge status={assinaturaAtiva.status} />
                       </div>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +19,7 @@ export default function OnboardingForm({ onComplete }: OnboardingFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   const handleWhatsAppChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatWhatsApp(e.target.value);
@@ -59,6 +61,11 @@ export default function OnboardingForm({ onComplete }: OnboardingFormProps) {
         title: "Bem-vindo ao 25h!",
         description: "Sua conta foi criada com o plano Free.",
       });
+
+      // Navegar para o dashboard após completar onboarding
+      setTimeout(() => {
+        setLocation('/');
+      }, 500);
 
       onComplete?.();
     } catch (error: any) {

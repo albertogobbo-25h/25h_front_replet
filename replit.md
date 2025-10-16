@@ -13,6 +13,19 @@ Sistema SaaS de gestão de cobranças com PIX automático via Pluggy, desenvolvi
   - Added "Status:" label next to badge for clarity
   - Reorganized CardHeader layout to give more prominence to subscription status
   - Improved visual hierarchy in subscription details card
+- **Date Formatting Timezone Fix**:
+  - Fixed bug where dates from database (e.g., 16/10) appeared as one day less (15/10) on screen
+  - Root cause: JavaScript Date constructor converting UTC midnight to local timezone (UTC-3 Brazil)
+  - Solution: Parse dates without timezone conversion for date-only strings
+- **Login/Onboarding Navigation Fix**:
+  - Fixed bug where users were redirected to last visited page (e.g., /assinatura) after login
+  - Changed OnboardingForm to explicitly navigate to '/' (dashboard) using wouter's setLocation
+  - Removed window.location.reload() which maintained current URL
+- **Payment URL Handling Improvements**:
+  - Added comprehensive logging for Edge Function iniciar_pagto_assinante responses
+  - Implemented fallback checks for multiple possible payment URL fields (paymentUrl, qrCodeUrl, pixUrl, url)
+  - Added warning toast when payment is processed but no URL is found for PIX Imediato
+  - Helps diagnose differences between PIX Automático and PIX Imediato responses
 
 ## Previous Changes (October 14, 2025)
 - **Fixed Client Registration Error**: Updated all Supabase queries to use app_data schema for multi-tenancy support

@@ -53,5 +53,11 @@ export function formatCurrency(value: number): string {
 }
 
 export function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('pt-BR');
+  // Extrair apenas a parte da data (YYYY-MM-DD) de qualquer formato
+  // Remove tempo e timezone para evitar conversão UTC -> local
+  const dateOnly = dateString.split('T')[0]; // Pega apenas YYYY-MM-DD
+  const [year, month, day] = dateOnly.split('-').map(Number);
+  
+  // Criar data local sem conversão de timezone
+  return new Date(year, month - 1, day).toLocaleDateString('pt-BR');
 }
