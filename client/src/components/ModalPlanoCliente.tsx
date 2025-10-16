@@ -222,7 +222,7 @@ export default function ModalPlanoCliente({
                 <>
                   <div className="space-y-2">
                     <Label htmlFor="valor_mensal">
-                      Valor Mensal <span className="text-destructive">*</span>
+                      Valor <span className="text-destructive">*</span>
                     </Label>
                     <Input
                       id="valor_mensal"
@@ -252,6 +252,7 @@ export default function ModalPlanoCliente({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="SEMANAL">Semanal</SelectItem>
                         <SelectItem value="MENSAL">Mensal</SelectItem>
                         <SelectItem value="TRIMESTRAL">Trimestral</SelectItem>
                         <SelectItem value="SEMESTRAL">Semestral</SelectItem>
@@ -338,6 +339,7 @@ export default function ModalPlanoCliente({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="SEMANAL">Semanal</SelectItem>
                         <SelectItem value="MENSAL">Mensal</SelectItem>
                         <SelectItem value="TRIMESTRAL">Trimestral</SelectItem>
                         <SelectItem value="SEMESTRAL">Semestral</SelectItem>

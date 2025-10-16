@@ -166,6 +166,8 @@ export default function PlanosCliente() {
   const getPeriodicidadeLabel = (periodicidade: string | null) => {
     if (!periodicidade) return '-';
     switch (periodicidade) {
+      case 'SEMANAL':
+        return 'Semanal';
       case 'MENSAL':
         return 'Mensal';
       case 'TRIMESTRAL':
@@ -258,7 +260,7 @@ export default function PlanosCliente() {
               </div>
             ) : (
               <>
-                {filteredPlanos.length} {filteredPlanos.length === 1 ? 'plano' : 'planos'}
+                {filteredPlanos.length} {filteredPlanos.length === 1 ? ' Plano' : ' Planos'}
               </>
             )}
           </CardTitle>

@@ -88,7 +88,7 @@ export default function ModalPagamento({
                     <CreditCard className="h-4 w-4" />
                     <div>
                       <p className="font-medium">PIX Imediato</p>
-                      <p className="text-xs text-muted-foreground">Pagamento único via QR Code</p>
+                      <p className="text-xs text-muted-foreground">Pagamento único, mês a mês</p>
                     </div>
                   </div>
                 </SelectItem>
@@ -100,7 +100,7 @@ export default function ModalPagamento({
             <Alert>
               <Zap className="h-4 w-4" />
               <AlertDescription>
-                Com PIX Automático, você autoriza débitos mensais automáticos. Você pode cancelar a
+                Com PIX Automático, você autoriza PIX mensais automáticos de forma recorrente. Você pode cancelar a
                 qualquer momento.
               </AlertDescription>
             </Alert>
@@ -110,8 +110,7 @@ export default function ModalPagamento({
             <Alert>
               <CreditCard className="h-4 w-4" />
               <AlertDescription>
-                Você será redirecionado para gerar o QR Code PIX. Após o pagamento, sua assinatura
-                será ativada automaticamente.
+                Com PIX Imediato, você autoriza somente o PIX da cobrança atual sem recorrência, sendo necessário autorizar a cobrança todos os meses.
               </AlertDescription>
             </Alert>
           )}
