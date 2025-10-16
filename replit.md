@@ -13,6 +13,12 @@ Sistema SaaS de gestão de cobranças com PIX automático via Pluggy, desenvolvi
   - Added "Status:" label next to badge for clarity
   - Reorganized CardHeader layout to give more prominence to subscription status
   - Improved visual hierarchy in subscription details card
+- **Login Flow Improvements**:
+  - Enhanced error message for failed login: now shows helpful message "Email ou senha incorretos. Não tem uma conta? Clique em 'Cadastre-se' abaixo."
+  - Added "Esqueci minha senha" link next to password field (only in login mode)
+  - Implemented password recovery functionality using Supabase auth.resetPasswordForEmail
+  - Shows collapsible recovery panel with instructions when user clicks "Esqueci minha senha"
+  - Validates email is provided before allowing password reset request
 
 ## Previous Changes (October 14, 2025)
 - **Fixed Client Registration Error**: Updated all Supabase queries to use app_data schema for multi-tenancy support
