@@ -349,32 +349,20 @@ export default function AssinaturaPage() {
 
           {/* Assinatura Pendente */}
           {assinaturaPendente && (
-            <Card className="border-2 border-yellow-500 bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-950/20 dark:to-amber-950/20">
-              <CardHeader className="pb-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4">
-                    <div className="p-3 bg-yellow-500/20 rounded-full">
-                      <AlertCircle className="h-8 w-8 text-yellow-600 dark:text-yellow-500" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-2xl text-yellow-800 dark:text-yellow-400 mb-2">
-                        Assinatura Aguardando Pagamento
-                      </CardTitle>
-                      {assinaturaPendente.cobranca_em_aberto && (
-                        <CardDescription className="text-base text-yellow-700 dark:text-yellow-300">
-                          Plano <span className="font-semibold">{assinaturaPendente.plano.titulo}</span> -{' '}
-                          <span className="font-mono font-bold">{formatCurrency(assinaturaPendente.cobranca_em_aberto.valor)}</span>
-                          {' '}· Vence em{' '}
-                          <span className="font-medium">{formatDate(assinaturaPendente.cobranca_em_aberto.data_vencimento)}</span>
-                        </CardDescription>
-                      )}
-                    </div>
-                  </div>
-                  <StatusBadge status={assinaturaPendente.status} />
+            <Alert className="border-yellow-500/50 bg-yellow-500/5">
+              <AlertCircle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium mb-1">Assinatura Aguardando Pagamento</p>
+                  {assinaturaPendente.cobranca_em_aberto && (
+                    <p className="text-sm text-muted-foreground">
+                      Plano {assinaturaPendente.plano.titulo} -{' '}
+                      {formatCurrency(assinaturaPendente.cobranca_em_aberto.valor)} - Vence em{' '}
+                      {formatDate(assinaturaPendente.cobranca_em_aberto.data_vencimento)}
+                    </p>
+                  )}
                 </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="flex gap-3">
+                <div className="flex gap-2">
                   {assinaturaPendente.cobranca_em_aberto && (
                     <Button
                       onClick={() => {
@@ -384,11 +372,10 @@ export default function AssinaturaPage() {
                         });
                         setModalPagamento(true);
                       }}
-                      size="lg"
-                      className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                      size="sm"
                       data-testid="button-pagar-pendente"
                     >
-                      <CreditCard className="mr-2 h-5 w-5" />
+                      <CreditCard className="mr-2 h-4 w-4" />
                       Pagar Agora
                     </Button>
                   )}
@@ -398,50 +385,35 @@ export default function AssinaturaPage() {
                       setModalCancelamento(true);
                     }}
                     variant="outline"
-                    size="lg"
-                    className="border-yellow-600 text-yellow-700 hover:bg-yellow-100 dark:border-yellow-500 dark:text-yellow-400 dark:hover:bg-yellow-950/30"
+                    size="sm"
                     data-testid="button-cancelar-pendente"
                   >
                     Cancelar
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
+              </AlertDescription>
+            </Alert>
           )}
 
           {/* Assinatura Suspensa */}
           {assinaturaSuspensa && (
-            <Card className="border-2 border-red-500 bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950/20 dark:to-rose-950/20">
-              <CardHeader className="pb-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4">
-                    <div className="p-3 bg-red-500/20 rounded-full">
-                      <AlertCircle className="h-8 w-8 text-red-600 dark:text-red-500" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-2xl text-red-800 dark:text-red-400 mb-2">
-                        Assinatura Suspensa
-                      </CardTitle>
-                      <CardDescription className="text-base text-red-700 dark:text-red-300">
-                        Sua assinatura foi suspensa. Renove para continuar usando o 25h.
-                      </CardDescription>
-                    </div>
-                  </div>
-                  <StatusBadge status={assinaturaSuspensa.status} />
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium mb-1">Assinatura Suspensa</p>
+                  <p className="text-sm">Sua assinatura foi suspensa. Renove para continuar usando.</p>
                 </div>
-              </CardHeader>
-              <CardContent className="pt-0">
                 <Button
                   onClick={() => setModalPlanos(true)}
-                  size="lg"
-                  className="bg-red-600 hover:bg-red-700 text-white"
+                  variant="default"
+                  size="sm"
                   data-testid="button-renovar"
                 >
-                  <CheckCircle className="mr-2 h-5 w-5" />
                   Renovar Agora
                 </Button>
-              </CardContent>
-            </Card>
+              </AlertDescription>
+            </Alert>
           )}
 
           {/* Sem Assinatura Ativa */}
