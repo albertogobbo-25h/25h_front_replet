@@ -4,6 +4,11 @@
 Sistema SaaS de gestão de cobranças com PIX automático via Pluggy, desenvolvido para profissionais autônomos e pequenas empresas no Brasil. O projeto visa otimizar a gestão financeira dos usuários, economizando tempo e aumentando a rentabilidade. A plataforma oferece funcionalidades completas de autenticação, gestão de assinaturas, clientes e cobranças. A plataforma é exclusiva para Pessoa Jurídica (CNPJ).
 
 ## Recent Changes (October 16, 2025)
+- **Date Formatting Null Safety Fix**:
+  - Fixed runtime error "Cannot read properties of undefined (reading 'split')"
+  - Added null/undefined validation to formatDate() function
+  - Now returns '-' for empty/null dates instead of crashing
+  - Prevents errors when database records have null date fields
 - **Profile Page Bug Fix**:
   - Added queryClient.invalidateQueries() to force data reload after saving
   - Implemented automatic navigation to dashboard after profile save
