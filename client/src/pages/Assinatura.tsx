@@ -300,6 +300,7 @@ export default function AssinaturaPage() {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-2xl">Plano Atual</CardTitle>
                     <div className="flex items-center gap-3">
+                      <span className="text-sm text-muted-foreground font-medium">Status:</span>
                       <div className="scale-150 origin-right">
                         <StatusBadge status={assinaturaAtiva.status} />
                       </div>

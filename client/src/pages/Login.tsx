@@ -6,20 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignup, setIsSignup] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-
-  // Fechar painel de recuperação quando alternar para signup
-  const handleToggleMode = () => {
-    setIsSignup(!isSignup);
-    setShowForgotPassword(false);
-  };
   const { signIn, signUp, signInWithGoogle } = useAuth();
   const { toast } = useToast();
 
@@ -33,14 +25,10 @@ export default function Login() {
         : await signIn(email, password);
 
       if (error) {
-        const errorMessage = !isSignup && error.message.includes('Invalid login credentials')
-          ? 'Email ou senha incorretos. Não tem uma conta? Clique em "Cadastre-se" abaixo.'
-          : error.message;
-        
         toast({
           variant: "destructive",
           title: "Erro na autenticação",
-          description: errorMessage,
+          description: error.message,
         });
       } else if (isSignup) {
         toast({
@@ -81,46 +69,6 @@ export default function Login() {
     }
   };
 
-  const handleForgotPassword = async () => {
-    if (!email) {
-      toast({
-        variant: "destructive",
-        title: "Email necessário",
-        description: "Por favor, digite seu email para recuperar a senha.",
-      });
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-
-      if (error) {
-        toast({
-          variant: "destructive",
-          title: "Erro ao enviar email",
-          description: error.message,
-        });
-      } else {
-        toast({
-          title: "Email enviado!",
-          description: "Verifique sua caixa de entrada para redefinir sua senha.",
-        });
-        setShowForgotPassword(false);
-      }
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Ocorreu um erro inesperado.",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background">
       <Card className="w-full max-w-md">
@@ -148,19 +96,7 @@ export default function Login() {
               />
             </div>
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Senha</Label>
-                {!isSignup && (
-                  <button
-                    type="button"
-                    onClick={() => setShowForgotPassword(true)}
-                    className="text-xs text-primary hover:underline"
-                    data-testid="button-forgot-password"
-                  >
-                    Esqueci minha senha
-                  </button>
-                )}
-              </div>
+              <Label htmlFor="password">Senha</Label>
               <Input
                 id="password"
                 type="password"
@@ -180,36 +116,6 @@ export default function Login() {
               {isLoading ? 'Aguarde...' : (isSignup ? 'Criar Conta' : 'Entrar')}
             </Button>
           </form>
-
-          {showForgotPassword && (
-            <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
-              <div className="space-y-2">
-                <h3 className="font-medium">Recuperar Senha</h3>
-                <p className="text-sm text-muted-foreground">
-                  Digite seu email acima e clique em "Enviar Link" para receber instruções de recuperação.
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowForgotPassword(false)}
-                  disabled={isLoading}
-                  className="flex-1"
-                  data-testid="button-cancel-forgot-password"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={handleForgotPassword}
-                  disabled={!email || isLoading}
-                  className="flex-1"
-                  data-testid="button-send-reset-email"
-                >
-                  {isLoading ? 'Enviando...' : 'Enviar Link'}
-                </Button>
-              </div>
-            </div>
-          )}
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
@@ -251,7 +157,7 @@ export default function Login() {
           <div className="text-center text-sm">
             <button
               type="button"
-              onClick={handleToggleMode}
+              onClick={() => setIsSignup(!isSignup)}
               className="text-primary hover:underline"
               data-testid="button-toggle-auth-mode"
             >
