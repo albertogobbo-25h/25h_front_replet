@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
+import { queryClient } from "@/lib/queryClient";
 import { formatWhatsApp, unformatWhatsApp, formatCNPJ, unformatCPFCNPJ, formatCEP } from "@/lib/masks";
 import { Loader2 } from "lucide-react";
 
@@ -101,6 +102,8 @@ export default function Perfil() {
       return data;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/assinante/dados'] });
+      
       toast({
         title: 'Dados atualizados',
         description: 'Seus dados foram atualizados com sucesso',
