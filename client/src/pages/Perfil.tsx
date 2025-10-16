@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
+import { queryClient } from "@/lib/queryClient";
 import { formatWhatsApp, unformatWhatsApp, formatCNPJ, unformatCPFCNPJ, formatCEP } from "@/lib/masks";
 import { Loader2 } from "lucide-react";
 
@@ -28,6 +30,7 @@ interface DadosAssinante {
 
 export default function Perfil() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [formData, setFormData] = useState({
     nome: '',
     nome_fantasia: '',
@@ -101,10 +104,17 @@ export default function Perfil() {
       return data;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/assinante/dados'] });
+      
       toast({
         title: 'Dados atualizados',
         description: 'Seus dados foram atualizados com sucesso',
       });
+      
+      // Navegar para o dashboard após salvar
+      setTimeout(() => {
+        setLocation('/');
+      }, 500);
     },
     onError: (error: any) => {
       toast({

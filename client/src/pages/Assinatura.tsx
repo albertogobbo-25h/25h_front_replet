@@ -296,12 +296,17 @@ export default function AssinaturaPage() {
           {assinaturaAtiva && (
             <Card className="border-primary/20">
               <CardHeader className="bg-primary/5">
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
                     <CardTitle className="text-2xl">Plano Atual</CardTitle>
-                    <CardDescription>Sua assinatura ativa</CardDescription>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-muted-foreground font-medium">Status:</span>
+                      <div className="scale-150 origin-right">
+                        <StatusBadge status={assinaturaAtiva.status} />
+                      </div>
+                    </div>
                   </div>
-                  <StatusBadge status={assinaturaAtiva.status} />
+                  <CardDescription>Sua assinatura ativa</CardDescription>
                 </div>
               </CardHeader>
               <CardContent className="space-y-6 pt-6">

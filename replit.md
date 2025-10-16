@@ -3,7 +3,18 @@
 ## Overview
 Sistema SaaS de gestão de cobranças com PIX automático via Pluggy, desenvolvido para profissionais autônomos e pequenas empresas no Brasil. O projeto visa otimizar a gestão financeira dos usuários, economizando tempo e aumentando a rentabilidade. A plataforma oferece funcionalidades completas de autenticação, gestão de assinaturas, clientes e cobranças. A plataforma é exclusiva para Pessoa Jurídica (CNPJ).
 
-## Recent Changes (October 14, 2025)
+## Recent Changes (October 16, 2025)
+- **Profile Page Bug Fix**:
+  - Added queryClient.invalidateQueries() to force data reload after saving
+  - Implemented automatic navigation to dashboard after profile save
+  - Fixed issue where address data wasn't reloading when returning to profile page
+- **Subscription Page UX Improvements**:
+  - Increased status badge size by 50% for better visibility
+  - Added "Status:" label next to badge for clarity
+  - Reorganized CardHeader layout to give more prominence to subscription status
+  - Improved visual hierarchy in subscription details card
+
+## Previous Changes (October 14, 2025)
 - **Fixed Client Registration Error**: Updated all Supabase queries to use app_data schema for multi-tenancy support
 - **Enhanced AuthContext**: Added assinante_id fetching via obter_dados_assinante() RPC
 - **Complete Profile Implementation**: 
