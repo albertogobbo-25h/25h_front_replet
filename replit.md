@@ -41,7 +41,22 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 - **Profile**: Complete integration with Supabase RPCs (`obter_dados_assinante`, `atualizar_dados_assinante`), real-time data loading, CNPJ-only validation, fields (Razão Social, Nome Fantasia, CNPJ, Email, WhatsApp, full address), Brazilian masks, loading states and error handling.
 
 ### System Design Choices
-- **Onboarding**: Upon signup, users complete an onboarding form, and an automatic Free plan is created via a `processar_pos_login` RPC call.
+- **Onboarding Flow** (Detailed):
+  1. User signs up/logs in via Supabase Auth
+  2. Frontend calls `processar_pos_login(p_nome?, p_whatsapp?)`
+  3. Backend returns status: "OK", "ERROR", or "SEM ASSINATURA"
+  4. **First Access (user doesn't exist)**:
+     - If nome/whatsapp not provided → ERROR with code USER_NOT_FOUND_MISSING_DATA
+     - Frontend shows onboarding form to collect data
+     - If provided → Creates assinante, usuario, roles (ADMIN + PROFISSIONAL), and FREE subscription
+  5. **Navigation Logic**:
+     - status="OK" + assinatura.status=ATIVA → Dashboard
+     - status="OK" + assinatura.status=AGUARDANDO_PAGAMENTO → Subscription page (payment link)
+     - status="OK" + assinatura.status=SUSPENSA → Subscription page (renewal)
+     - status="OK" + assinatura.status=CANCELADA → Subscription page (new plan)
+     - status="SEM ASSINATURA" → Subscription page (plan selection)
+     - status="ERROR" + code=USER_NOT_FOUND_MISSING_DATA → Onboarding form
+  6. Free subscription is automatically created with validity = today + dias_degustacao
 - **Data Formatting**: Cadastral data is unformatted before backend transmission and formatted for frontend display.
 - **Form Protection**: User input in critical forms is protected against accidental resets.
 - **Business Rule**: The system exclusively supports Pessoa Jurídica (CNPJ).
