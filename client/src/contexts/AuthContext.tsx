@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { callSupabase, ApiError } from '@/lib/api-helper';
 
 interface AuthContextType {
   user: User | null;
@@ -24,18 +25,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Buscar assinante_id quando o usuário estiver logado
   const fetchAssinanteId = async () => {
     try {
-      const { data, error } = await supabase.rpc('obter_dados_assinante');
+      const dados = await callSupabase<{ id: string }>(() =>
+        supabase.rpc('obter_dados_assinante')
+      );
       
-      if (error) {
-        console.error('Erro ao buscar assinante_id:', error);
-        return;
-      }
-
-      if (data?.status === 'OK' && data?.data?.id) {
-        setAssinanteId(data.data.id);
+      if (dados?.id) {
+        setAssinanteId(dados.id);
       }
     } catch (error) {
-      console.error('Erro ao buscar assinante_id:', error);
+      if (error instanceof ApiError) {
+        console.error('Erro ao buscar assinante_id:', error.code, error.message);
+      } else {
+        console.error('Erro ao buscar assinante_id:', error);
+      }
     }
   };
 
