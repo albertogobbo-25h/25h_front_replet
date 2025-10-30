@@ -41,14 +41,15 @@ export default function AssinaturaPage() {
   } | null>(null);
 
   // Query: Listar assinaturas (sempre inclui histórico)
-  const { data: assinaturasData, isLoading: loadingAssinaturas } = useQuery({
+  const { data: assinaturasData, isLoading: loadingAssinaturas } = useQuery<Assinatura[]>({
     queryKey: ['/api/assinaturas'],
     queryFn: async () => {
-      return await callSupabase(async () => 
+      const data = await callSupabase<Assinatura[]>(async () => 
         await supabase.rpc('listar_assinaturas', {
           p_incluir_historico: true,
         })
       );
+      return data || [];
     },
     refetchInterval: 30000, // Polling a cada 30s
   });
