@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { callSupabase, ApiError } from '@/lib/api-helper';
+import { queryClient } from '@/lib/queryClient';
 
 interface AuthContextType {
   user: User | null;
@@ -106,8 +107,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    return { error };
+    try {
+      // Deslogar do Supabase primeiro
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Erro ao deslogar do Supabase:', error);
+        return { error };
+      }
+      
+      // Só limpa o cache e estados após logout bem-sucedido
+      queryClient.clear();
+      
+      // Resetar estados locais
+      setAssinanteId(null);
+      setUser(null);
+      setSession(null);
+      
+      // Limpar possíveis dados em localStorage relacionados ao TanStack Query
+      localStorage.removeItem('REACT_QUERY_OFFLINE_CACHE');
+      
+      return { error: null };
+    } catch (err) {
+      console.error('Erro inesperado no logout:', err);
+      return { error: err as AuthError };
+    }
   };
 
   return (
