@@ -34,9 +34,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error) {
       if (error instanceof ApiError) {
-        console.error('Erro ao buscar assinante_id:', error.code, error.message);
+        console.error('❌ Erro ao buscar assinante_id:', error.code, error.message);
+        
+        // Se o usuário não existe, pode ser que o onboarding não foi processado corretamente
+        if (error.code === 'USER_NOT_FOUND') {
+          console.warn('⚠️ Usuário sem registro de assinante. Isso pode indicar que o onboarding não foi concluído corretamente.');
+          // Mantém assinanteId como null - o App.tsx redirecionará para onboarding se necessário
+        }
       } else {
-        console.error('Erro ao buscar assinante_id:', error);
+        console.error('❌ Erro ao buscar assinante_id:', error);
       }
     }
   };

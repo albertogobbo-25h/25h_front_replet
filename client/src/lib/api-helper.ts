@@ -41,15 +41,30 @@ export async function callSupabase<T>(
   
   // Erro de rede/Supabase (não chegou no backend)
   if (error) {
+    console.error('❌ callSupabase - Erro de rede/Supabase:', {
+      message: error.message,
+      context: error.context,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+      fullError: error
+    });
+    
     throw new ApiError(
       error.message || 'Erro ao comunicar com o servidor',
-      'NETWORK_ERROR',
-      { originalError: error }
+      error.code || 'NETWORK_ERROR',
+      { 
+        originalError: error,
+        context: error.context,
+        hint: error.hint,
+        details: error.details
+      }
     );
   }
   
   // Erro da aplicação (backend retornou erro)
   if (data?.status === 'ERROR') {
+    console.error('❌ callSupabase - Erro da aplicação:', data);
     const { code, message, ...details } = data;
     throw new ApiError(message, code || 'UNKNOWN_ERROR', details);
   }
