@@ -37,7 +37,23 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 - **Client Management**: List clients, CRUD operations (create, read, update, activate/deactivate), client details.
 - **Client Plans Management**: Create and manage service plans for clients (VALOR_FIXO, PACOTE, VALOR_VARIAVEL), CRUD operations, dynamic form fields.
 - **Charge Management**: Complete CRUD operations for charges, create standalone charges, list charges with Supabase integration, dynamic status calculation (EM_ABERTO, VENCIDO, PAGO, CANCELADO, FALHOU), comprehensive filters, dynamic totalizers, actions on charges (view details, send via WhatsApp, mark as paid manually, cancel).
-- **Subscription**: Display current plan, pending payment actions, plan selection modal (monthly/annual), cadastral data validation, PIX payment integration via Pluggy, automatic status polling, upgrade/renewal/cancellation flows.
+- **Subscription Management** (Complete Flow):
+  - **Page Structure**: Two tabs (Plano Atual, Histórico) with automatic 30s polling
+  - **Ativa**: Display current plan with "Mudar Plano" and "Cancelar Assinatura" actions
+  - **Pendente (AGUARDANDO_PAGAMENTO)**: Alert showing plan, value, due date, and "Pagar Agora" + "Cancelar" actions
+  - **Suspensa**: Alert with "Renovar Agora" action (creates new pending subscription)
+  - **Sem Assinatura**: Call-to-action to choose plan
+  - **Histórico**: Lists all subscriptions (including CANCELADAS) with status badges
+  - **Actions Implemented**:
+    - Pagar Pendente → Opens payment modal with PIX options
+    - Mudar Plano → Opens plan selection modal, validates data, creates pending subscription
+    - Cancelar Ativa/Pendente → Opens cancellation modal (backend function pending)
+    - Renovar (when Suspensa) → Opens plan selection modal
+  - **Business Rules Enforced**:
+    - Maximum 1 AGUARDANDO_PAGAMENTO subscription per user
+    - Coexistence of ATIVA + PENDENTE allowed (upgrade/renewal scenario)
+    - Payment activation cancels previous ATIVA subscription
+    - Validity projection based on previous non-free subscription
 - **Profile**: Complete integration with Supabase RPCs (`obter_dados_assinante`, `atualizar_dados_assinante`), real-time data loading, CNPJ-only validation, fields (Razão Social, Nome Fantasia, CNPJ, Email, WhatsApp, full address), Brazilian masks, loading states and error handling.
 
 ### System Design Choices
@@ -61,6 +77,16 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 - **Form Protection**: User input in critical forms is protected against accidental resets.
 - **Business Rule**: The system exclusively supports Pessoa Jurídica (CNPJ).
 - **Edge Functions**: All Supabase Edge Function calls use `supabase.functions.invoke()` for automatic URL resolution, authentication header injection, and consistent error handling.
+- **Subscription Business Rules**:
+  - **Coexistence**: Can have one ATIVA and one PENDENTE subscription simultaneously (upgrade/renewal scenario)
+  - **Activation by Payment**: When payment is confirmed, PENDENTE becomes ATIVA and previous ATIVA is cancelled
+  - **Validity Projection**: 
+    - If there's ATIVA non-free subscription: new validity = old.data_validade + period
+    - If there's ATIVA free or no subscription: new validity = today + period
+  - **Subscription Creation**: User can create new subscription anytime (expired free or not)
+  - **Cancellation**: User can cancel ATIVA or PENDENTE; when cancelling PENDENTE, associated charge is also cancelled
+  - **Suspensa**: Occurs when subscription expires; user can start new cycle creating PENDENTE + charge
+  - **Idempotency**: Webhook must be idempotent (repeated calls return 200 without side effects)
 
 ## External Dependencies
 - **Supabase**: Authentication (email/password, Google OAuth) and PostgreSQL database.
