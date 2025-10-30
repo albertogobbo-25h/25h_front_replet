@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { formatWhatsApp, unformatWhatsApp } from "@/lib/masks";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { callSupabase, ApiError } from "@/lib/api-helper";
 import { useToast } from "@/hooks/use-toast";
 
 interface OnboardingFormProps {
@@ -36,17 +37,12 @@ export default function OnboardingForm({ onComplete }: OnboardingFormProps) {
       const whatsappSemFormatacao = unformatWhatsApp(whatsapp);
 
       // Chamar RPC para processar pós-login e criar assinatura gratuita
-      const { data, error } = await supabase.rpc('processar_pos_login', {
-        p_nome: nome,
-        p_whatsapp: whatsappSemFormatacao
-      });
-
-      if (error) throw error;
-
-      // Verificar resposta
-      if (data.status === 'ERROR') {
-        throw new Error(data.message || 'Erro ao processar cadastro');
-      }
+      await callSupabase(async () => 
+        await supabase.rpc('processar_pos_login', {
+          p_nome: nome,
+          p_whatsapp: whatsappSemFormatacao
+        })
+      );
 
       // Atualizar metadados do usuário no Supabase Auth
       await supabase.auth.updateUser({

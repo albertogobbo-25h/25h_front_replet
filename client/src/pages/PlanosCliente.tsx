@@ -22,6 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Plus, Search, Loader2, Edit, Power, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { callSupabase, ApiError } from "@/lib/api-helper";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/masks";
@@ -50,11 +51,11 @@ export default function PlanosCliente() {
   const { data: planos = [], isLoading } = useQuery<ClientePlano[]>({
     queryKey: ['/api/cliente-planos'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('listar_cliente_planos', {
-        p_limit: 1000,
-      });
-
-      if (error) throw error;
+      const data = await callSupabase<ClientePlano[]>(async () => 
+        await supabase.rpc('listar_cliente_planos', {
+          p_limit: 1000,
+        })
+      );
       return data || [];
     },
   });
@@ -63,10 +64,9 @@ export default function PlanosCliente() {
   const toggleStatusMutation = useMutation({
     mutationFn: async ({ id, ativo }: { id: string; ativo: boolean }) => {
       const rpcName = ativo ? 'reativar_cliente_plano' : 'desativar_cliente_plano';
-      const { data, error } = await supabase.rpc(rpcName, { p_plano_id: id });
-
-      if (error) throw error;
-      if (data?.status === 'ERROR') throw new Error(data.message);
+      await callSupabase(async () => 
+        await supabase.rpc(rpcName, { p_plano_id: id })
+      );
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/cliente-planos'] });
@@ -87,12 +87,11 @@ export default function PlanosCliente() {
   // Mutation: Excluir plano
   const excluirMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { data, error } = await supabase.rpc('excluir_cliente_plano', {
-        p_plano_id: id,
-      });
-
-      if (error) throw error;
-      if (data?.status === 'ERROR') throw new Error(data.message);
+      await callSupabase(async () => 
+        await supabase.rpc('excluir_cliente_plano', {
+          p_plano_id: id,
+        })
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/cliente-planos'] });

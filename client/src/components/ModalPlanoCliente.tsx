@@ -21,6 +21,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
+import { callSupabase, ApiError } from "@/lib/api-helper";
 import { Loader2, Info } from "lucide-react";
 import type { ClientePlano } from "@/types/cliente";
 
@@ -101,10 +102,9 @@ export default function ModalPlanoCliente({
       if (isEdit && plano) {
         // Atualizar plano existente
         params.p_plano_id = plano.id;
-        const { data, error } = await supabase.rpc('atualizar_cliente_plano', params);
-
-        if (error) throw error;
-        if (data?.status === 'ERROR') throw new Error(data.message);
+        await callSupabase(async () => 
+          await supabase.rpc('atualizar_cliente_plano', params)
+        );
 
         toast({
           title: 'Plano atualizado',
@@ -112,10 +112,9 @@ export default function ModalPlanoCliente({
         });
       } else {
         // Criar novo plano
-        const { data, error } = await supabase.rpc('criar_cliente_plano', params);
-
-        if (error) throw error;
-        if (data?.status === 'ERROR') throw new Error(data.message);
+        await callSupabase(async () => 
+          await supabase.rpc('criar_cliente_plano', params)
+        );
 
         toast({
           title: 'Plano criado',

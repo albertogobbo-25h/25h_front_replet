@@ -3,7 +3,18 @@
 ## Overview
 Sistema SaaS de gestão de cobranças com PIX automático via Pluggy, desenvolvido para profissionais autônomos e pequenas empresas no Brasil. O projeto visa otimizar a gestão financeira dos usuários, economizando tempo e aumentando a rentabilidade. A plataforma oferece funcionalidades completas de autenticação, gestão de assinaturas, clientes e cobranças. A plataforma é exclusiva para Pessoa Jurídica (CNPJ).
 
-## Recent Changes (October 16, 2025)
+## Recent Changes (October 30, 2025)
+- **Unified API Response Pattern Implementation**:
+  - Created `lib/api-helper.ts` with `callSupabase()` helper and `ApiError` class
+  - Migrated all RPC and Edge Functions calls to use unified error handling
+  - Standardized response format: `{status: "OK"|"ERROR", message: string, data: any}`
+  - Helper automatically extracts `data` from successful responses
+  - Throws `ApiError` with code, message, and details for all failures
+  - Improved error messages and type safety across all API calls
+  - Migrated files: AuthContext, Perfil, Assinatura, PlanosCliente, OnboardingForm, ModalPlanoCliente, ModalDadosCadastrais
+  - Benefits: Consistent error handling, better UX with clear error messages, easier debugging
+
+## Previous Changes (October 16, 2025)
 - **Date Formatting Null Safety Fix**:
   - Fixed runtime error "Cannot read properties of undefined (reading 'split')"
   - Added null/undefined validation to formatDate() function
@@ -69,6 +80,12 @@ I prefer simple language and clear, concise explanations. I want iterative devel
   - Supabase PostgreSQL with multi-tenancy (app_data schema)
   - RLS policies using app_internal.current_assinante_id() for tenant isolation
   - All queries use .schema('app_data') for proper schema access
+- **API Response Pattern**: 
+  - Unified helper `callSupabase()` in `lib/api-helper.ts` for all RPC/Edge Functions
+  - Consistent error handling with `ApiError` class (code, message, details)
+  - All backend responses follow `{status, message, data}` format
+  - Frontend automatically receives normalized data (no need to check status or unwrap .data)
+  - Usage: `const result = await callSupabase(async () => await supabase.rpc('function_name', params))`
 - **Masks**: Brazilian masks implemented for WhatsApp, CNPJ, CEP.
 - **Testing**: `data-testid` attributes are extensively used for E2E testing with Playwright.
 

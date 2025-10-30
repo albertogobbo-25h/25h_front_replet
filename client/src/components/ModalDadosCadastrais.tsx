@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
+import { callSupabase, ApiError } from "@/lib/api-helper";
 import type { DadosAssinante } from "@/types/assinatura";
 import { formatWhatsApp, formatCNPJ, unformatWhatsApp, unformatCPFCNPJ } from "@/lib/masks";
 
@@ -75,20 +76,16 @@ export default function ModalDadosCadastrais({
       const cpfCnpjSemFormatacao = unformatCPFCNPJ(formData.cpf_cnpj);
       const whatsappSemFormatacao = unformatWhatsApp(formData.whatsapp);
 
-      const { data, error } = await supabase.rpc('atualizar_dados_assinante', {
-        p_nome: formData.nome,
-        p_nome_fantasia: formData.nome_fantasia || null,
-        p_cpf_cnpj: cpfCnpjSemFormatacao,
-        p_tipo_pessoa: tipoPessoa,
-        p_email: formData.email,
-        p_whatsapp: whatsappSemFormatacao,
-      });
-
-      if (error) throw error;
-
-      if (data?.status === 'ERROR') {
-        throw new Error(data.message || 'Erro ao atualizar dados');
-      }
+      await callSupabase(async () => 
+        await supabase.rpc('atualizar_dados_assinante', {
+          p_nome: formData.nome,
+          p_nome_fantasia: formData.nome_fantasia || null,
+          p_cpf_cnpj: cpfCnpjSemFormatacao,
+          p_tipo_pessoa: tipoPessoa,
+          p_email: formData.email,
+          p_whatsapp: whatsappSemFormatacao,
+        })
+      );
 
       toast({
         title: 'Dados atualizados',

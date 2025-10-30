@@ -11,6 +11,7 @@ import ModalPagamento from "@/components/ModalPagamento";
 import ModalCancelamento from "@/components/ModalCancelamento";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
+import { callSupabase, ApiError } from "@/lib/api-helper";
 import { queryClient } from "@/lib/queryClient";
 import { formatDate, formatCurrency } from "@/lib/masks";
 import { Loader2, CreditCard, AlertCircle, CheckCircle, TrendingUp, History } from "lucide-react";
@@ -43,14 +44,11 @@ export default function AssinaturaPage() {
   const { data: assinaturasData, isLoading: loadingAssinaturas } = useQuery({
     queryKey: ['/api/assinaturas'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('listar_assinaturas', {
-        p_incluir_historico: true,
-      });
-
-      if (error) throw error;
-      if (data?.status === 'ERROR') throw new Error(data.message);
-
-      return data;
+      return await callSupabase(async () => 
+        await supabase.rpc('listar_assinaturas', {
+          p_incluir_historico: true,
+        })
+      );
     },
     refetchInterval: 30000, // Polling a cada 30s
   });
@@ -59,11 +57,11 @@ export default function AssinaturaPage() {
   const { data: planosData } = useQuery<Plano[]>({
     queryKey: ['/api/planos', false],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('listar_planos_assinatura', {
-        p_incluir_gratuito: false,
-      });
-
-      if (error) throw error;
+      const data = await callSupabase<Plano[]>(async () => 
+        await supabase.rpc('listar_planos_assinatura', {
+          p_incluir_gratuito: false,
+        })
+      );
       return data || [];
     },
     enabled: modalPlanos,
@@ -73,12 +71,13 @@ export default function AssinaturaPage() {
   const { data: dadosAssinante, refetch: refetchDados } = useQuery<DadosAssinante | null>({
     queryKey: ['/api/assinante/dados'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('obter_dados_assinante');
-
-      if (error) throw error;
-      if (data?.status === 'ERROR') return null;
-
-      return data?.data || null;
+      try {
+        return await callSupabase<DadosAssinante>(async () => 
+          await supabase.rpc('obter_dados_assinante')
+        );
+      } catch (error) {
+        return null;
+      }
     },
     enabled: modalDados,
   });
@@ -92,23 +91,20 @@ export default function AssinaturaPage() {
       planoId: number;
       periodicidade: AssinaturaPeriodicidade;
     }) => {
-      const { data, error } = await supabase.rpc('criar_nova_assinatura', {
-        p_plano_id: planoId,
-        p_periodicidade: periodicidade,
-      });
-
-      if (error) throw error;
-      if (data?.status === 'ERROR') throw new Error(data.message);
-
-      return data;
+      return await callSupabase(async () => 
+        await supabase.rpc('criar_nova_assinatura', {
+          p_plano_id: planoId,
+          p_periodicidade: periodicidade,
+        })
+      );
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/assinaturas'] });
 
-      if (data?.data?.cobranca) {
+      if (data?.cobranca) {
         setCobrancaParaPagar({
-          id: data.data.cobranca.id,
-          valor: data.data.cobranca.valor,
+          id: data.cobranca.id,
+          valor: data.cobranca.valor,
         });
         setModalPagamento(true);
       }
@@ -136,19 +132,16 @@ export default function AssinaturaPage() {
       cobrancaId: string;
       meioPagamento: MeioPagamento;
     }) => {
-      const { data, error } = await supabase.functions.invoke('iniciar_pagto_assinante', {
-        body: {
-          cobranca_id: cobrancaId,
-          meio_pagamento: meioPagamento,
-        },
-      });
-
-      if (error) throw error;
-      if (data?.status === 'ERROR') throw new Error(data.message);
-
-      return data;
+      return await callSupabase(async () => 
+        await supabase.functions.invoke('iniciar_pagto_assinante', {
+          body: {
+            cobranca_id: cobrancaId,
+            meio_pagamento: meioPagamento,
+          },
+        })
+      );
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       // Debug logs (apenas em desenvolvimento)
       if (import.meta.env.DEV) {
         console.log('🔍 Resposta Edge Function iniciar_pagto_assinante:', JSON.stringify(data, null, 2));
@@ -156,12 +149,12 @@ export default function AssinaturaPage() {
       
       // Tentar diferentes campos possíveis para a URL de pagamento
       const paymentUrl = 
-        data?.data?.pluggy?.paymentUrl || 
-        data?.data?.pluggy?.qrCodeUrl ||
-        data?.data?.pluggy?.pixUrl ||
-        data?.data?.paymentUrl ||
-        data?.data?.qrCodeUrl ||
-        data?.data?.url;
+        data?.pluggy?.paymentUrl || 
+        data?.pluggy?.qrCodeUrl ||
+        data?.pluggy?.pixUrl ||
+        data?.paymentUrl ||
+        data?.qrCodeUrl ||
+        data?.url;
 
       if (import.meta.env.DEV) {
         console.log('💳 Payment URL encontrada:', paymentUrl ? 'Sim' : 'Não');
@@ -200,24 +193,21 @@ export default function AssinaturaPage() {
   // Mutation: Cancelar assinatura via Edge Function
   const cancelarAssinaturaMutation = useMutation({
     mutationFn: async ({ assinaturaId, motivo }: { assinaturaId: string; motivo?: string }) => {
-      const { data, error } = await supabase.functions.invoke('cancelar_assinatura', {
-        body: {
-          assinatura_id: assinaturaId,
-          motivo: motivo || 'solicitacao_usuario',
-        },
-      });
-
-      if (error) throw error;
-      if (data?.status === 'ERROR') throw new Error(data.message || 'Erro ao processar cancelamento');
-
-      return data;
+      return await callSupabase(async () => 
+        await supabase.functions.invoke('cancelar_assinatura', {
+          body: {
+            assinatura_id: assinaturaId,
+            motivo: motivo || 'solicitacao_usuario',
+          },
+        })
+      );
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/assinaturas'] });
 
       toast({
         title: 'Assinatura cancelada',
-        description: data?.message || 'Sua assinatura foi cancelada com sucesso.',
+        description: 'Sua assinatura foi cancelada com sucesso.',
       });
 
       setModalCancelamento(false);
@@ -238,16 +228,22 @@ export default function AssinaturaPage() {
     setPlanoSelecionado({ id: planoId, periodicidade });
 
     // Verificar dados cadastrais
-    const { data } = await supabase.rpc('obter_dados_assinante');
-    const dados = data?.data;
+    try {
+      const dados = await callSupabase<DadosAssinante>(async () => 
+        await supabase.rpc('obter_dados_assinante')
+      );
 
-    const dadosIncompletos =
-      !dados?.nome || !dados?.cpf_cnpj || !dados?.tipo_pessoa || !dados?.email;
+      const dadosIncompletos =
+        !dados?.nome || !dados?.cpf_cnpj || !dados?.tipo_pessoa || !dados?.email;
 
-    if (dadosIncompletos) {
+      if (dadosIncompletos) {
+        setModalDados(true);
+      } else {
+        criarAssinaturaMutation.mutate({ planoId, periodicidade });
+      }
+    } catch (error) {
+      // Se não conseguir obter dados, assume que está incompleto
       setModalDados(true);
-    } else {
-      criarAssinaturaMutation.mutate({ planoId, periodicidade });
     }
   };
 
@@ -284,7 +280,7 @@ export default function AssinaturaPage() {
     });
   };
 
-  const assinaturas = assinaturasData?.data || [];
+  const assinaturas = assinaturasData || [];
   const assinaturaAtiva = assinaturas.find((a: Assinatura) => a.status === 'ATIVA');
   const assinaturaPendente = assinaturas.find((a: Assinatura) => a.status === 'AGUARDANDO_PAGAMENTO');
   const assinaturaSuspensa = assinaturas.find((a: Assinatura) => a.status === 'SUSPENSA');
