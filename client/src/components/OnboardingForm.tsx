@@ -37,11 +37,13 @@ export default function OnboardingForm({ onComplete }: OnboardingFormProps) {
       const whatsappSemFormatacao = unformatWhatsApp(whatsapp);
 
       // Chamar RPC para processar pós-login e criar assinatura gratuita
-      await callSupabase(async () => 
-        await supabase.rpc('processar_pos_login', {
-          p_nome: nome,
-          p_whatsapp: whatsappSemFormatacao
-        })
+      const result = await callSupabase<any>(
+        async () => 
+          await supabase.rpc('processar_pos_login', {
+            p_nome: nome,
+            p_whatsapp: whatsappSemFormatacao
+          }),
+        'processar_pos_login'
       );
 
       // Atualizar metadados do usuário no Supabase Auth
@@ -55,13 +57,26 @@ export default function OnboardingForm({ onComplete }: OnboardingFormProps) {
 
       toast({
         title: "Bem-vindo ao 25h!",
-        description: "Sua conta foi criada com o plano Free.",
+        description: "Sua conta foi criada com sucesso.",
       });
 
-      // Navegar para o dashboard após completar onboarding
-      setTimeout(() => {
+      // Redirecionar conforme status da assinatura (conforme guia)
+      if (!result.assinatura) {
+        // Não tem assinatura -> tela de escolha de plano
+        setLocation('/assinatura');
+      } else if (result.assinatura.status === 'ATIVA') {
+        // Ir para Dashboard
         setLocation('/');
-      }, 500);
+      } else if (result.assinatura.status === 'AGUARDANDO_PAGAMENTO') {
+        // Mostrar tela de pagamento pendente
+        setLocation('/assinatura');
+      } else if (result.assinatura.status === 'SUSPENSA') {
+        // Tela de renovação (plano expirado)
+        setLocation('/assinatura');
+      } else {
+        // Padrão: ir para dashboard
+        setLocation('/');
+      }
 
       onComplete?.();
     } catch (error: any) {

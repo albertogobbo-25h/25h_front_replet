@@ -1,0 +1,408 @@
+Guia Rápido - Frontend → Backend API
+Objetivo: Referência rápida das chamadas backend para implementação do frontend.
+
+🔐 Autenticação
+Todas as chamadas requerem JWT token do Supabase Auth:
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+// Usuário autenticado automaticamente após login
+1️⃣ ONBOARDING (Após Login/Signup)
+🔹 Processar Pós-Login
+Quando chamar: Logo após login/signup bem-sucedido
+
+const { data } = await supabase.rpc('processar_pos_login', {
+  p_nome: 'João Silva',        // opcional (obrigatório se 1ª vez)
+  p_whatsapp: '11987654321'    // opcional (obrigatório se 1ª vez)
+})
+Retorno:
+
+{
+  status: 'OK' | 'ERROR' | 'SEM ASSINATURA',
+  code?: 'USER_NOT_FOUND_MISSING_DATA' | ...,  // se ERROR
+  message?: string,                              // se ERROR
+  usuario: {
+    id: string,
+    nome: string,
+    nome_exibicao: string,
+    whatsapp: string,
+    ver_boas_vindas: boolean
+  },
+  funcoes: ['ADMIN', 'PROFISSIONAL'],
+  assinante: {
+    id: string,
+    nome: string,
+    nome_fantasia: string
+  },
+  assinatura?: {
+    id: string,
+    status: 'ATIVA' | 'AGUARDANDO_PAGAMENTO' | 'SUSPENSA' | 'CANCELADA',
+    periodicidade: 'MENSAL' | 'ANUAL',
+    data_inicio: string,
+    data_validade: string,
+    plano: {
+      id: number,
+      titulo: string,
+      ind_gratuito: boolean
+    }
+  }
+}
+Tratamento no Frontend:
+
+if (data.status === 'ERROR' && data.code === 'USER_NOT_FOUND_MISSING_DATA') {
+  // Mostrar formulário para coletar nome e whatsapp
+  // Chamar novamente com dados preenchidos
+}
+
+if (data.status === 'OK') {
+  if (!data.assinatura) {
+    // Não tem assinatura -> tela de escolha de plano
+  } else if (data.assinatura.status === 'ATIVA') {
+    // Ir para Dashboard
+  } else if (data.assinatura.status === 'AGUARDANDO_PAGAMENTO') {
+    // Mostrar tela de pagamento pendente
+  } else if (data.assinatura.status === 'SUSPENSA') {
+    // Tela de renovação (plano expirado)
+  }
+}
+
+if (data.status === 'SEM ASSINATURA') {
+  // Redirecionar para escolha de plano
+}
+2️⃣ GESTÃO DE ASSINATURA
+🔹 Listar Planos Disponíveis
+// Apenas planos pagos (para upgrade)
+const { data: planos } = await supabase.rpc('listar_planos_assinatura', {
+  p_incluir_gratuito: false
+})
+
+// Resultado: Array de planos
+// [{ id, titulo, descricao, valor_mensal, valor_anual, ... }]
+🔹 Listar Assinaturas do Usuário
+const { data } = await supabase.rpc('listar_assinaturas', {
+  p_incluir_historico: false  // true para incluir canceladas
+})
+Retorno:
+
+{
+  status: 'OK',
+  data: [{
+    assinatura_id: string,
+    status: 'ATIVA' | 'AGUARDANDO_PAGAMENTO' | 'SUSPENSA' | 'CANCELADA',
+    periodicidade: 'MENSAL' | 'ANUAL',
+    data_inicio: string,
+    data_validade: string,
+    plano: {
+      id: number,
+      titulo: string,
+      ind_gratuito: boolean
+    },
+    cobranca_em_aberto?: {
+      id: string,
+      valor: number,
+      data_vencimento: string,
+      status: 'EM_ABERTO',
+      link_pagamento?: string
+    }
+  }]
+}
+🔹 Criar Nova Assinatura (Upgrade/Renovação)
+Quando chamar: Quando usuário escolhe plano pago
+
+const { data } = await supabase.rpc('criar_nova_assinatura', {
+  p_plano_id: 2,              // ID do plano escolhido
+  p_periodicidade: 'MENSAL'   // 'MENSAL' ou 'ANUAL'
+})
+Retorno:
+
+{
+  status: 'OK' | 'ERROR',
+  code?: 'INCOMPLETE_DATA' | 'PLAN_NOT_FOUND' | 'PENDING_SUBSCRIPTION_EXISTS' | ...,
+  message: string,
+  data?: {
+    assinatura: {
+      id: string,
+      status: 'AGUARDANDO_PAGAMENTO',
+      data_inicio: string,
+      data_validade: string
+    },
+    cobranca: {
+      id: string,           // ⚠️ IMPORTANTE: usar para iniciar pagamento
+      valor: number,
+      data_vencimento: string
+    },
+    plano: { id, titulo, descricao },
+    assinatura_atual?: { ... }  // se houver assinatura ativa
+  },
+  required_fields?: ['nome', 'cpf_cnpj', 'tipo_pessoa']  // se dados incompletos
+}
+Tratamento de Erro - Dados Incompletos:
+
+if (data.code === 'INCOMPLETE_DATA') {
+  // Redirecionar para tela de atualização de cadastro
+  // Chamar atualizar_dados_assinante() primeiro
+  // Depois tentar criar_nova_assinatura() novamente
+}
+🔹 Iniciar Pagamento da Cobrança
+Quando chamar: Após criar assinatura ou quando usuário clicar em "Pagar"
+
+const { data, error } = await supabase.functions.invoke('iniciar_pagto_assinante', {
+  body: {
+    cobranca_id: 'uuid-da-cobranca',              // do passo anterior
+    meio_pagamento: 'OPF_PIX_AUTOMATICO'          // ou 'OPF_PIX_IMEDIATO'
+  }
+})
+Retorno:
+
+{
+  status: 'OK' | 'ERROR',
+  message: string,
+  data?: {
+    pluggy: {
+      id: string,
+      paymentUrl: string,        // ⚠️ USAR PARA REDIRECIONAR
+      status: string
+    },
+    database: {
+      cobranca_id: string,
+      assinatura_id: string,
+      request_id: string
+    }
+  },
+  code?: 'DADOS_INCOMPLETOS' | 'BILLING_NOT_FOUND' | 'PAYMENT_IN_PROGRESS' | ...,
+  campos_faltantes?: ['email', 'cpf_cnpj']  // se dados incompletos
+}
+Próximo Passo:
+
+if (data.status === 'OK') {
+  const paymentUrl = data.data.pluggy.paymentUrl
+  
+  // Opção 1: Abrir em nova aba
+  window.open(paymentUrl, '_blank')
+  
+  // Opção 2: Redirecionar na mesma página
+  window.location.href = paymentUrl
+  
+  // Após pagamento, Pluggy retorna e webhook atualiza status automaticamente
+  // Frontend deve fazer polling ou WebSocket para atualizar UI
+}
+
+if (data.code === 'DADOS_INCOMPLETOS') {
+  // Redirecionar para completar cadastro
+  // Mostrar quais campos faltam: data.campos_faltantes
+}
+3️⃣ GERENCIAR DADOS DO ASSINANTE
+🔹 Obter Dados Atuais
+const { data } = await supabase.rpc('obter_dados_assinante')
+Retorno:
+
+{
+  status: 'OK',
+  data: {
+    id: string,
+    nome: string,
+    nome_fantasia?: string,
+    cpf_cnpj?: string,
+    tipo_pessoa?: 'FISICA' | 'JURIDICA',
+    email?: string,
+    whatsapp: string,
+    rua?: string,
+    numero?: string,
+    complemento?: string,
+    bairro?: string,
+    cidade?: string,
+    uf?: string,
+    cep?: string
+  }
+}
+🔹 Atualizar Dados
+Quando chamar: Antes de criar assinatura paga (se dados incompletos)
+
+const { data } = await supabase.rpc('atualizar_dados_assinante', {
+  p_nome: 'João Silva',
+  p_email: 'joao@email.com',
+  p_cpf_cnpj: '12345678900',
+  p_tipo_pessoa: 'FISICA',
+  p_whatsapp: '11987654321'
+  // Outros campos opcionais: rua, numero, cidade, uf, cep, etc.
+})
+Retorno:
+
+{
+  status: 'OK' | 'ERROR',
+  code?: 'INVALID_EMAIL' | 'INVALID_WHATSAPP' | 'INVALID_DOCUMENTO' | ...,
+  message: string,
+  data?: {
+    // dados atualizados
+  }
+}
+4️⃣ CANCELAR ASSINATURA
+⚠️ EM DESENVOLVIMENTO
+// ❌ Função ainda não implementada
+const { data } = await supabase.rpc('cancelar_assinatura', {
+  p_assinatura_id: 'uuid'
+})
+Status: Aguardando implementação backend
+
+Alternativa temporária: Contato com suporte
+
+📊 FLUXO COMPLETO - EXEMPLO PRÁTICO
+Cenário: Novo usuário faz upgrade de gratuito para pago
+// 1. Após login
+const { data: posLogin } = await supabase.rpc('processar_pos_login')
+
+// 2. Verificar se tem assinatura gratuita
+if (posLogin.assinatura?.plano.ind_gratuito) {
+  // 3. Listar planos pagos
+  const { data: planos } = await supabase.rpc('listar_planos_assinatura', {
+    p_incluir_gratuito: false
+  })
+  
+  // 4. Usuário escolhe plano e clica em "Assinar"
+  // Verificar se dados estão completos
+  const { data: dadosAssinante } = await supabase.rpc('obter_dados_assinante')
+  
+  const temDadosCompletos = 
+    dadosAssinante.data.nome &&
+    dadosAssinante.data.cpf_cnpj &&
+    dadosAssinante.data.tipo_pessoa &&
+    dadosAssinante.data.email
+  
+  // 5. Se dados incompletos, pedir para completar
+  if (!temDadosCompletos) {
+    const { data: atualizado } = await supabase.rpc('atualizar_dados_assinante', {
+      p_nome: 'João Silva',
+      p_email: 'joao@email.com',
+      p_cpf_cnpj: '12345678900',
+      p_tipo_pessoa: 'FISICA'
+    })
+  }
+  
+  // 6. Criar nova assinatura
+  const { data: novaAssinatura } = await supabase.rpc('criar_nova_assinatura', {
+    p_plano_id: 2,
+    p_periodicidade: 'MENSAL'
+  })
+  
+  if (novaAssinatura.status === 'OK') {
+    const cobrancaId = novaAssinatura.data.cobranca.id
+    
+    // 7. Iniciar pagamento
+    const { data: pagamento } = await supabase.functions.invoke('iniciar_pagto_assinante', {
+      body: {
+        cobranca_id: cobrancaId,
+        meio_pagamento: 'OPF_PIX_AUTOMATICO'
+      }
+    })
+    
+    if (pagamento.status === 'OK') {
+      // 8. Redirecionar para Pluggy
+      window.open(pagamento.data.pluggy.paymentUrl, '_blank')
+      
+      // 9. Após pagamento, webhook atualiza automaticamente
+      // Frontend deve fazer polling ou usar realtime para detectar mudança
+      
+      // 10. Verificar status periodicamente
+      const checkStatus = setInterval(async () => {
+        const { data: assinaturas } = await supabase.rpc('listar_assinaturas')
+        const assinaturaAtual = assinaturas.data.find(a => a.status === 'ATIVA')
+        
+        if (assinaturaAtual) {
+          clearInterval(checkStatus)
+          // Redirecionar para dashboard
+          router.push('/dashboard')
+        }
+      }, 5000) // verificar a cada 5 segundos
+    }
+  }
+}
+🔄 VERIFICAR STATUS DE PAGAMENTO (Polling)
+Opção 1: Polling Manual
+
+const verificarStatus = async (assinaturaId: string) => {
+  const { data } = await supabase.rpc('listar_assinaturas')
+  const assinatura = data.data.find(a => a.assinatura_id === assinaturaId)
+  return assinatura?.status === 'ATIVA'
+}
+
+// Verificar a cada 5 segundos
+const intervalId = setInterval(async () => {
+  const isAtiva = await verificarStatus(assinaturaId)
+  if (isAtiva) {
+    clearInterval(intervalId)
+    // Atualizar UI
+  }
+}, 5000)
+Opção 2: Supabase Realtime (Recomendado)
+
+// Escutar mudanças na tabela assinatura
+const subscription = supabase
+  .channel('assinaturas')
+  .on(
+    'postgres_changes',
+    {
+      event: 'UPDATE',
+      schema: 'app_data',
+      table: 'assinatura',
+      filter: `id=eq.${assinaturaId}`
+    },
+    (payload) => {
+      if (payload.new.status === 'ATIVA') {
+        // Assinatura ativada!
+        // Atualizar UI
+        router.push('/dashboard')
+      }
+    }
+  )
+  .subscribe()
+
+// Cleanup
+return () => subscription.unsubscribe()
+⚠️ TRATAMENTO DE ERROS COMUNS
+Dados Incompletos
+if (data.code === 'INCOMPLETE_DATA' || data.code === 'DADOS_INCOMPLETOS') {
+  // Redirecionar para tela de cadastro
+  // Mostrar campos obrigatórios: data.required_fields ou data.campos_faltantes
+}
+Assinatura Pendente Existente
+if (data.code === 'PENDING_SUBSCRIPTION_EXISTS') {
+  // Já existe assinatura aguardando pagamento
+  // Oferecer: "Continuar pagamento pendente" ou "Cancelar e criar nova"
+}
+Pagamento em Andamento
+if (data.code === 'PAYMENT_IN_PROGRESS') {
+  // Já existe requisição de pagamento em andamento
+  // Mostrar status atual e link para continuar
+}
+Plano Não Encontrado
+if (data.code === 'PLAN_NOT_FOUND' || data.code === 'PLAN_INACTIVE') {
+  // Plano não existe ou foi desativado
+  // Mostrar lista de planos disponíveis novamente
+}
+📝 CHECKLIST DE IMPLEMENTAÇÃO
+Onboarding
+ Chamar processar_pos_login() após login
+ Tratar USER_NOT_FOUND_MISSING_DATA (coletar nome + whatsapp)
+ Redirecionar conforme status da assinatura
+ Implementar fluxo de escolha de plano
+Upgrade/Renovação
+ Listar planos com listar_planos_assinatura(false)
+ Verificar dados completos com obter_dados_assinante()
+ Completar dados com atualizar_dados_assinante() se necessário
+ Criar assinatura com criar_nova_assinatura()
+ Iniciar pagamento com Edge Function iniciar_pagto_assinante
+ Redirecionar para Pluggy (paymentUrl)
+Pós-Pagamento
+ Implementar polling ou Realtime para verificar ativação
+ Atualizar UI quando assinatura for ativada
+ Mostrar mensagem de sucesso
+Gestão
+ Listar assinaturas ativas/pendentes com listar_assinaturas()
+ Permitir upgrade de plano
+ Permitir visualização de histórico (incluir_historico: true)
+🚀 PRONTO PARA COMEÇAR!
+Este guia cobre todos os endpoints necessários para implementar o fluxo completo de onboarding e gestão de assinaturas.
+
+Dúvidas? Consulte a documentação completa em:
+
+docs/backend/FLUXO_ONBOARDING.md
+docs/backend/FLUXO_GESTÃO_ASSINATURA.md

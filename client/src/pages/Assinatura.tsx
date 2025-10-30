@@ -92,11 +92,13 @@ export default function AssinaturaPage() {
       planoId: number;
       periodicidade: AssinaturaPeriodicidade;
     }) => {
-      return await callSupabase(async () => 
-        await supabase.rpc('criar_nova_assinatura', {
-          p_plano_id: planoId,
-          p_periodicidade: periodicidade,
-        })
+      return await callSupabase(
+        async () => 
+          await supabase.rpc('criar_nova_assinatura', {
+            p_plano_id: planoId,
+            p_periodicidade: periodicidade,
+          }),
+        'criar_nova_assinatura'
       );
     },
     onSuccess: (data: any) => {
@@ -116,11 +118,47 @@ export default function AssinaturaPage() {
       });
     },
     onError: (error: any) => {
-      toast({
-        title: 'Erro ao criar assinatura',
-        description: error.message,
-        variant: 'destructive',
-      });
+      // Tratamento de erros específicos conforme guia
+      if (error instanceof ApiError) {
+        if (error.code === 'INCOMPLETE_DATA') {
+          // Dados incompletos - redirecionar para perfil
+          toast({
+            title: 'Dados cadastrais incompletos',
+            description: 'Por favor, complete seus dados cadastrais antes de assinar um plano pago.',
+            variant: 'destructive',
+          });
+          setModalPlanos(false);
+          setModalDados(true);
+        } else if (error.code === 'PENDING_SUBSCRIPTION_EXISTS') {
+          // Já existe assinatura pendente
+          toast({
+            title: 'Assinatura pendente',
+            description: 'Você já possui uma assinatura aguardando pagamento. Complete o pagamento pendente ou aguarde sua expiração.',
+            variant: 'destructive',
+          });
+        } else if (error.code === 'PLAN_NOT_FOUND' || error.code === 'PLAN_INACTIVE') {
+          // Plano não encontrado ou inativo
+          toast({
+            title: 'Plano indisponível',
+            description: 'O plano selecionado não está disponível. Por favor, escolha outro plano.',
+            variant: 'destructive',
+          });
+          setModalPlanos(true);
+        } else {
+          // Erro genérico
+          toast({
+            title: 'Erro ao criar assinatura',
+            description: error.message,
+            variant: 'destructive',
+          });
+        }
+      } else {
+        toast({
+          title: 'Erro ao criar assinatura',
+          description: error.message || 'Ocorreu um erro inesperado.',
+          variant: 'destructive',
+        });
+      }
     },
   });
 
@@ -150,14 +188,8 @@ export default function AssinaturaPage() {
         console.log('🔍 Resposta Edge Function iniciar_pagto_assinante:', JSON.stringify(data, null, 2));
       }
       
-      // Tentar diferentes campos possíveis para a URL de pagamento
-      const paymentUrl = 
-        data?.pluggy?.paymentUrl || 
-        data?.pluggy?.qrCodeUrl ||
-        data?.pluggy?.pixUrl ||
-        data?.paymentUrl ||
-        data?.qrCodeUrl ||
-        data?.url;
+      // Tentar diferentes campos possíveis para a URL de pagamento (conforme guia)
+      const paymentUrl = data?.pluggy?.paymentUrl;
 
       if (import.meta.env.DEV) {
         console.log('💳 Payment URL encontrada:', paymentUrl ? 'Sim' : 'Não');
@@ -170,6 +202,29 @@ export default function AssinaturaPage() {
           description:
             'Você será redirecionado para realizar a autorização do PIX. Após o pagamento, sua assinatura será ativada automaticamente.',
         });
+        
+        // Iniciar polling para verificar ativação da assinatura (conforme guia)
+        const intervalId = setInterval(async () => {
+          const { data: assinaturas } = await supabase.rpc('listar_assinaturas', {
+            p_incluir_historico: false
+          });
+          
+          if (assinaturas?.data) {
+            const assinaturaAtiva = assinaturas.data.find((a: any) => a.status === 'ATIVA');
+            
+            if (assinaturaAtiva) {
+              clearInterval(intervalId);
+              queryClient.invalidateQueries({ queryKey: ['/api/assinaturas'] });
+              toast({
+                title: 'Pagamento confirmado!',
+                description: 'Sua assinatura foi ativada com sucesso.',
+              });
+            }
+          }
+        }, 5000); // Verificar a cada 5 segundos
+        
+        // Limpar polling após 5 minutos (timeout de segurança)
+        setTimeout(() => clearInterval(intervalId), 5 * 60 * 1000);
       } else {
         if (import.meta.env.DEV) {
           console.warn('⚠️ Nenhuma URL de pagamento encontrada na resposta');
@@ -185,11 +240,44 @@ export default function AssinaturaPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/assinaturas'] });
     },
     onError: (error: any) => {
-      toast({
-        title: 'Erro ao iniciar pagamento',
-        description: error.message,
-        variant: 'destructive',
-      });
+      // Tratamento de erros específicos conforme guia
+      if (error instanceof ApiError) {
+        if (error.code === 'DADOS_INCOMPLETOS') {
+          // Dados incompletos
+          const camposFaltantes = error.details?.campos_faltantes || [];
+          toast({
+            title: 'Dados cadastrais incompletos',
+            description: `Por favor, complete os seguintes dados: ${camposFaltantes.join(', ')}`,
+            variant: 'destructive',
+          });
+          setModalPagamento(false);
+          setModalDados(true);
+        } else if (error.code === 'BILLING_NOT_FOUND') {
+          toast({
+            title: 'Cobrança não encontrada',
+            description: 'A cobrança não foi encontrada. Por favor, tente criar uma nova assinatura.',
+            variant: 'destructive',
+          });
+        } else if (error.code === 'PAYMENT_IN_PROGRESS') {
+          toast({
+            title: 'Pagamento em andamento',
+            description: 'Já existe uma requisição de pagamento em andamento para esta cobrança.',
+            variant: 'destructive',
+          });
+        } else {
+          toast({
+            title: 'Erro ao iniciar pagamento',
+            description: error.message,
+            variant: 'destructive',
+          });
+        }
+      } else {
+        toast({
+          title: 'Erro ao iniciar pagamento',
+          description: error.message || 'Ocorreu um erro inesperado.',
+          variant: 'destructive',
+        });
+      }
     },
   });
 
