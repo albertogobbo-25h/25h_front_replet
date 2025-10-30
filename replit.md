@@ -13,6 +13,16 @@ Sistema SaaS de gestão de cobranças com PIX automático via Pluggy, desenvolvi
   - Improved error messages and type safety across all API calls
   - Migrated files: AuthContext, Perfil, Assinatura, PlanosCliente, OnboardingForm, ModalPlanoCliente, ModalDadosCadastrais
   - Benefits: Consistent error handling, better UX with clear error messages, easier debugging
+- **Enhanced Error Logging and Diagnostics**:
+  - Added function name tracking to all callSupabase() calls for better debugging
+  - Implemented detailed error logging with full error context, hints, and details
+  - Added specific error messages for Edge Function failures
+  - Errors now clearly identify which function failed and provide actionable guidance
+  - Example: "Edge Function 'iniciar_pagto_assinante' não está acessível. Verifique se a função está deployada no Supabase."
+- **TypeScript Type Safety Improvements**:
+  - Fixed all LSP diagnostics in Assinatura.tsx (5 errors resolved)
+  - Added proper type annotations to Assinatura[] query
+  - Improved type inference across all API calls
 
 ## Previous Changes (October 16, 2025)
 - **Date Formatting Null Safety Fix**:
