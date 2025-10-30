@@ -40,7 +40,7 @@ function Router() {
   }
 
   if (needsOnboarding) {
-    return <OnboardingForm onComplete={() => window.location.reload()} />;
+    return <OnboardingForm />;
   }
 
   const sidebarStyle = {

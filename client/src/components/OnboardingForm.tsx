@@ -36,7 +36,7 @@ export default function OnboardingForm({ onComplete }: OnboardingFormProps) {
       // Remover formatação do WhatsApp antes de enviar
       const whatsappSemFormatacao = unformatWhatsApp(whatsapp);
 
-      // Chamar RPC para processar pós-login e criar assinatura gratuita
+      // Chamar RPC para processar pós-login (conforme fluxo de onboarding)
       const result = await callSupabase<any>(
         async () => 
           await supabase.rpc('processar_pos_login', {
@@ -60,26 +60,43 @@ export default function OnboardingForm({ onComplete }: OnboardingFormProps) {
         description: "Sua conta foi criada com sucesso.",
       });
 
-      // Redirecionar conforme status da assinatura (conforme guia)
+      // Redirecionar conforme fluxo de onboarding documentado
+      // Status pode ser: "OK", "ERROR" ou "SEM ASSINATURA"
+      
+      // Se não tem assinatura -> tela de escolha de plano
       if (!result.assinatura) {
-        // Não tem assinatura -> tela de escolha de plano
         setLocation('/assinatura');
-      } else if (result.assinatura.status === 'ATIVA') {
-        // Ir para Dashboard
-        setLocation('/');
-      } else if (result.assinatura.status === 'AGUARDANDO_PAGAMENTO') {
-        // Mostrar tela de pagamento pendente
-        setLocation('/assinatura');
-      } else if (result.assinatura.status === 'SUSPENSA') {
-        // Tela de renovação (plano expirado)
-        setLocation('/assinatura');
-      } else {
-        // Padrão: ir para dashboard
-        setLocation('/');
+        onComplete?.();
+        return;
+      }
+
+      // Se tem assinatura, verificar status
+      switch (result.assinatura.status) {
+        case 'ATIVA':
+          // Ir para Dashboard
+          setLocation('/');
+          break;
+        
+        case 'AGUARDANDO_PAGAMENTO':
+        case 'SUSPENSA':
+          // Mostrar tela de pagamento pendente / renovação
+          setLocation('/assinatura');
+          break;
+        
+        case 'CANCELADA':
+          // Redirecionar para escolha de novo plano
+          setLocation('/assinatura');
+          break;
+        
+        default:
+          // Padrão: ir para dashboard
+          setLocation('/');
       }
 
       onComplete?.();
     } catch (error: any) {
+      // Se erro for USER_NOT_FOUND_MISSING_DATA, o formulário já está sendo exibido
+      // Outros erros devem ser mostrados ao usuário
       toast({
         variant: "destructive",
         title: "Erro ao salvar",

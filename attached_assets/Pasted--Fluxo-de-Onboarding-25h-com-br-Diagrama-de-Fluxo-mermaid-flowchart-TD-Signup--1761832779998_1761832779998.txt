@@ -1,0 +1,136 @@
+# Fluxo de Onboarding - 25h.com.br
+
+## Diagrama de Fluxo
+
+```mermaid
+flowchart TD
+
+%% Signup/Login
+A[Usuário faz Signup/Login<br/>Supabase Auth] --> B{Login válido?}
+
+B -- Não --> X[Erro de autenticação]
+B -- Sim --> C[Frontend chama:<br/>public.processar_pos_login nome?, whatsapp?]
+
+%% Verificação inicial
+C --> D{Resposta.status}
+
+D -- ERROR --> E[Frontend pede Nome + Telefone]
+E --> C
+
+D -- OK --> G{Assinatura?}
+D -- SEM ASSINATURA --> J[Redirecionar para Tela de Escolha de Plano]
+
+%% Avaliação da assinatura
+G -- Ativa --> H[Ir para Dashboard]
+G -- Aguardando pagamento --> I[Exibir dados da assinatura + link de pagamento]
+G -- Suspensa --> I
+G -- Cancelada --> J[Redirecionar para Tela de Escolha de Novo Plano]
+```
+
+## Funções Backend Utilizadas
+
+### 1. **Login/Signup**
+- **Tecnologia:** Supabase Auth
+- **Método:** Email/Password, OAuth, etc.
+
+### 2. **Processamento Pós-Login**
+- **Função:** `public.processar_pos_login(p_nome TEXT, p_whatsapp TEXT)`
+- **Tipo:** RPC Function (SECURITY DEFINER)
+- **Acesso:** `authenticated`
+- **Descrição:** Processa primeiro acesso do usuário após login/signup
+- **Parâmetros:**
+  - `p_nome` (opcional): Nome do usuário (obrigatório apenas no primeiro acesso)
+  - `p_whatsapp` (opcional): WhatsApp do usuário (obrigatório apenas no primeiro acesso)
+
+**Retorno:**
+```json
+{
+  "status": "OK | ERROR | SEM ASSINATURA",
+  "code": "ERROR_CODE (se status = ERROR)",
+  "message": "Mensagem de erro (se status = ERROR)",
+  "usuario": {
+    "id": "uuid",
+    "nome": "string",
+    "nome_visualizacao": "string",
+    "nome_exibicao": "string",
+    "whatsapp": "string",
+    "ver_boas_vindas": "boolean",
+    "ver_tutoriais": "boolean",
+    "ver_notificacoes": "boolean"
+  },
+  "funcoes": ["ADMIN", "PROFISSIONAL"],
+  "assinante": {
+    "id": "uuid",
+    "nome": "string",
+    "nome_fantasia": "string"
+  },
+  "assinatura": {
+    "id": "uuid",
+    "status": "ATIVA | AGUARDANDO_PAGAMENTO | SUSPENSA | CANCELADA",
+    "periodicidade": "MENSAL | ANUAL",
+    "data_inicio": "date",
+    "data_validade": "date",
+    "plano": {
+      "id": "number",
+      "titulo": "string",
+      "descricao": "string",
+      "ind_gratuito": "boolean"
+    }
+  }
+}
+```
+
+**Comportamento:**
+1. **Primeira chamada (usuário não existe):**
+   - Se `nome` e `whatsapp` não forem fornecidos → retorna `ERROR` com code `USER_NOT_FOUND_MISSING_DATA`
+   - Se fornecidos → cria assinante, usuário, funções (ADMIN + PROFISSIONAL) e assinatura gratuita
+
+2. **Chamadas subsequentes (usuário existe):**
+   - Retorna dados do usuário, assinante, funções e assinatura atual
+   - `status = "SEM ASSINATURA"` se não houver assinatura válida
+
+**Lógica de Criação Automática:**
+- Cria assinante com dados mínimos
+- Cria usuário vinculado ao assinante
+- Atribui funções ADMIN e PROFISSIONAL
+- Busca plano gratuito ativo
+- Cria assinatura gratuita com status `ATIVA`
+- Define validade = hoje + `dias_degustacao` do plano
+
+## Tratamento no Frontend
+
+### Status: OK
+- Verificar `assinatura.status`:
+  - `ATIVA` → Dashboard
+  - `AGUARDANDO_PAGAMENTO` → Tela de pagamento (mostrar link)
+  - `SUSPENSA` → Tela de renovação
+  - `CANCELADA` → Tela de escolha de plano
+
+### Status: SEM ASSINATURA
+- Redirecionar para tela de escolha de plano
+- Chamar `public.listar_planos_assinatura(false)` para listar planos pagos
+
+### Status: ERROR
+- Se `code = "USER_NOT_FOUND_MISSING_DATA"`:
+  - Mostrar formulário para coletar nome e whatsapp
+  - Chamar novamente `processar_pos_login()` com dados preenchidos
+- Outros erros:
+  - Exibir mensagem de erro ao usuário
+
+## Funções Auxiliares
+
+### Atualizar Dados do Assinante
+- **Função:** `public.atualizar_dados_assinante(...)`
+- **Uso:** Antes de criar assinatura paga (requer dados completos)
+
+### Obter Dados do Assinante
+- **Função:** `public.obter_dados_assinante()`
+- **Uso:** Verificar se dados estão completos
+
+## Observações
+
+- O nome da função foi corrigido de `ativar_plano_gratuito` para `processar_pos_login`
+- A função é idempotente: pode ser chamada múltiplas vezes sem problemas
+- Criação automática do plano gratuito acontece apenas no primeiro acesso
+- Dados mínimos no primeiro acesso: nome + whatsapp
+- Dados completos necessários para upgrade: nome, email, cpf_cnpj, tipo_pessoa, whatsapp
