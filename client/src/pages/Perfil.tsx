@@ -112,12 +112,40 @@ export default function Perfil() {
       }, 500);
     },
     onError: (error: any) => {
-      const message = error instanceof ApiError ? error.message : 'Erro ao atualizar dados';
-      toast({
-        title: 'Erro ao atualizar dados',
-        description: message,
-        variant: 'destructive',
-      });
+      // Tratamento de erros específicos conforme guia
+      if (error instanceof ApiError) {
+        if (error.code === 'INVALID_EMAIL') {
+          toast({
+            title: 'Email inválido',
+            description: 'Por favor, informe um endereço de email válido.',
+            variant: 'destructive',
+          });
+        } else if (error.code === 'INVALID_WHATSAPP') {
+          toast({
+            title: 'WhatsApp inválido',
+            description: 'Por favor, informe um número de WhatsApp válido.',
+            variant: 'destructive',
+          });
+        } else if (error.code === 'INVALID_DOCUMENTO') {
+          toast({
+            title: 'CNPJ inválido',
+            description: 'Por favor, informe um CNPJ válido.',
+            variant: 'destructive',
+          });
+        } else {
+          toast({
+            title: 'Erro ao atualizar dados',
+            description: error.message,
+            variant: 'destructive',
+          });
+        }
+      } else {
+        toast({
+          title: 'Erro ao atualizar dados',
+          description: 'Ocorreu um erro inesperado.',
+          variant: 'destructive',
+        });
+      }
     },
   });
 
