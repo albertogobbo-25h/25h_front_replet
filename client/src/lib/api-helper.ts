@@ -19,29 +19,35 @@ export class ApiError extends Error {
  * Trata o padrão de resposta {status, message, data}
  * 
  * @param fn Função que retorna Promise do Supabase
+ * @param functionName Nome da função (para melhor logging de erros)
  * @returns Dados da resposta (.data)
  * @throws ApiError se houver erro
  * 
  * @example
  * // RPC Function
- * const clientes = await callSupabase<Cliente[]>(() =>
- *   supabase.rpc('listar_clientes', { p_nome: 'João' })
+ * const clientes = await callSupabase<Cliente[]>(
+ *   () => supabase.rpc('listar_clientes', { p_nome: 'João' }),
+ *   'listar_clientes'
  * )
  * 
  * @example
  * // Edge Function
- * const result = await callSupabase(() =>
- *   supabase.functions.invoke('enviar-mensagem', { body: {...} })
+ * const result = await callSupabase(
+ *   () => supabase.functions.invoke('enviar-mensagem', { body: {...} }),
+ *   'enviar-mensagem'
  * )
  */
 export async function callSupabase<T>(
-  fn: () => Promise<{ data: any; error: any }>
+  fn: () => Promise<{ data: any; error: any }>,
+  functionName?: string
 ): Promise<T> {
   const { data, error } = await fn();
   
   // Erro de rede/Supabase (não chegou no backend)
   if (error) {
-    console.error('❌ callSupabase - Erro de rede/Supabase:', {
+    const functionInfo = functionName ? ` (${functionName})` : '';
+    console.error(`❌ callSupabase${functionInfo} - Erro de rede/Supabase:`, {
+      functionName,
       message: error.message,
       context: error.context,
       details: error.details,
@@ -50,10 +56,19 @@ export async function callSupabase<T>(
       fullError: error
     });
     
+    // Mensagem de erro mais específica
+    let errorMessage = error.message || 'Erro ao comunicar com o servidor';
+    
+    // Se é um erro de Edge Function, adicionar orientações
+    if (error.message?.includes('Edge Function')) {
+      errorMessage = `Edge Function "${functionName || 'desconhecida'}" não está acessível. Verifique se a função está deployada no Supabase.`;
+    }
+    
     throw new ApiError(
-      error.message || 'Erro ao comunicar com o servidor',
+      errorMessage,
       error.code || 'NETWORK_ERROR',
       { 
+        functionName,
         originalError: error,
         context: error.context,
         hint: error.hint,

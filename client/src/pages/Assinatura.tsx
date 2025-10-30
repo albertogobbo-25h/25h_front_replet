@@ -132,13 +132,15 @@ export default function AssinaturaPage() {
       cobrancaId: string;
       meioPagamento: MeioPagamento;
     }) => {
-      return await callSupabase(async () => 
-        await supabase.functions.invoke('iniciar_pagto_assinante', {
-          body: {
-            cobranca_id: cobrancaId,
-            meio_pagamento: meioPagamento,
-          },
-        })
+      return await callSupabase(
+        async () => 
+          await supabase.functions.invoke('iniciar_pagto_assinante', {
+            body: {
+              cobranca_id: cobrancaId,
+              meio_pagamento: meioPagamento,
+            },
+          }),
+        'iniciar_pagto_assinante'
       );
     },
     onSuccess: (data: any) => {
@@ -193,13 +195,15 @@ export default function AssinaturaPage() {
   // Mutation: Cancelar assinatura via Edge Function
   const cancelarAssinaturaMutation = useMutation({
     mutationFn: async ({ assinaturaId, motivo }: { assinaturaId: string; motivo?: string }) => {
-      return await callSupabase(async () => 
-        await supabase.functions.invoke('cancelar_assinatura', {
-          body: {
-            assinatura_id: assinaturaId,
-            motivo: motivo || 'solicitacao_usuario',
-          },
-        })
+      return await callSupabase(
+        async () => 
+          await supabase.functions.invoke('cancelar_assinatura', {
+            body: {
+              assinatura_id: assinaturaId,
+              motivo: motivo || 'solicitacao_usuario',
+            },
+          }),
+        'cancelar_assinatura'
       );
     },
     onSuccess: () => {
