@@ -25,8 +25,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Buscar assinante_id quando o usuário estiver logado
   const fetchAssinanteId = async () => {
     try {
-      const dados = await callSupabase<{ id: string }>(() =>
-        supabase.rpc('obter_dados_assinante')
+      const dados = await callSupabase<{ id: string }>( async () =>
+        await supabase.rpc('obter_dados_assinante')
       );
       
       if (dados?.id) {

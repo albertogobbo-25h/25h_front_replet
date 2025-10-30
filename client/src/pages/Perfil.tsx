@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
 import { formatWhatsApp, unformatWhatsApp, formatCNPJ, unformatCPFCNPJ, formatCEP } from "@/lib/masks";
+import { callSupabase, ApiError } from "@/lib/api-helper";
 import { Loader2 } from "lucide-react";
 
 interface DadosAssinante {
@@ -50,12 +51,9 @@ export default function Perfil() {
   const { data: dadosAssinante, isLoading } = useQuery<DadosAssinante | null>({
     queryKey: ['/api/assinante/dados'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('obter_dados_assinante');
-
-      if (error) throw error;
-      if (data?.status === 'ERROR') throw new Error(data.message);
-
-      return data?.data || null;
+      return await callSupabase<DadosAssinante>(async () =>
+        await supabase.rpc('obter_dados_assinante')
+      );
     },
   });
 
@@ -82,26 +80,23 @@ export default function Perfil() {
   // Mutation: Atualizar dados do assinante
   const atualizarDadosMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.rpc('atualizar_dados_assinante', {
-        p_nome: formData.nome,
-        p_nome_fantasia: formData.nome_fantasia || null,
-        p_cpf_cnpj: unformatCPFCNPJ(formData.cnpj),
-        p_tipo_pessoa: 'JURIDICA',
-        p_email: formData.email,
-        p_whatsapp: unformatWhatsApp(formData.whatsapp) || null,
-        p_rua: formData.rua || null,
-        p_numero: formData.numero || null,
-        p_complemento: formData.complemento || null,
-        p_bairro: formData.bairro || null,
-        p_cidade: formData.cidade || null,
-        p_uf: formData.uf || null,
-        p_cep: formData.cep.replace(/\D/g, '') || null,
-      });
-
-      if (error) throw error;
-      if (data?.status === 'ERROR') throw new Error(data.message);
-
-      return data;
+      return await callSupabase(async () =>
+        await supabase.rpc('atualizar_dados_assinante', {
+          p_nome: formData.nome,
+          p_nome_fantasia: formData.nome_fantasia || null,
+          p_cpf_cnpj: unformatCPFCNPJ(formData.cnpj),
+          p_tipo_pessoa: 'JURIDICA',
+          p_email: formData.email,
+          p_whatsapp: unformatWhatsApp(formData.whatsapp) || null,
+          p_rua: formData.rua || null,
+          p_numero: formData.numero || null,
+          p_complemento: formData.complemento || null,
+          p_bairro: formData.bairro || null,
+          p_cidade: formData.cidade || null,
+          p_uf: formData.uf || null,
+          p_cep: formData.cep.replace(/\D/g, '') || null,
+        })
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/assinante/dados'] });
@@ -117,9 +112,10 @@ export default function Perfil() {
       }, 500);
     },
     onError: (error: any) => {
+      const message = error instanceof ApiError ? error.message : 'Erro ao atualizar dados';
       toast({
         title: 'Erro ao atualizar dados',
-        description: error.message,
+        description: message,
         variant: 'destructive',
       });
     },
