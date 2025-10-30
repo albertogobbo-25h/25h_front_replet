@@ -30,6 +30,7 @@ I prefer simple language and clear, concise explanations. I want iterative devel
   - Frontend automatically receives normalized data.
 - **Masks**: Brazilian masks implemented for WhatsApp, CNPJ, CEP.
 - **Testing**: `data-testid` attributes are extensively used for E2E testing with Playwright.
+- **Logout Security**: Complete cache clearing implemented to prevent data leakage between users (queryClient.clear(), state reset, localStorage cleanup after successful Supabase sign-out).
 
 ### Feature Specifications
 - **Authentication**: Login/Signup, onboarding with name and WhatsApp, automatic Free plan creation on signup, session management, route protection.
