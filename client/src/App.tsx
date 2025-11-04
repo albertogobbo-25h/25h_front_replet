@@ -16,6 +16,7 @@ import PlanosCliente from "@/pages/PlanosCliente";
 import Cobrancas from "@/pages/Cobrancas";
 import Assinatura from "@/pages/Assinatura";
 import Perfil from "@/pages/Perfil";
+import TemplatesWhatsApp from "@/pages/TemplatesWhatsApp";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -64,6 +65,7 @@ function Router() {
               <Route path="/planos" component={PlanosCliente} />
               <Route path="/cobrancas" component={Cobrancas} />
               <Route path="/assinatura" component={Assinatura} />
+              <Route path="/templates-whatsapp" component={TemplatesWhatsApp} />
               <Route path="/perfil" component={Perfil} />
               <Route component={NotFound} />
             </Switch>

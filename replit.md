@@ -11,7 +11,7 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 ### UI/UX Decisions
 - **Color Scheme**: Professional blue (`hsl(217, 91%, 60%)`) as primary, with distinct colors for success, warning, and destructive actions.
 - **Typography**: Inter for general UI, Roboto Mono for financial values and dates.
-- **Components**: Utilizes `shadcn/ui` for standardized components (`DashboardKPICard`, `StatusBadge`, `ClienteTable`, `CobrancaTable`, `AppSidebar`, `PlanCard`, `ModalCliente`, `ModalPlanoCliente`, `ModalCobranca`).
+- **Components**: Utilizes `shadcn/ui` for standardized components (`DashboardKPICard`, `StatusBadge`, `ClienteTable`, `CobrancaTable`, `AppSidebar`, `PlanCard`, `ModalCliente`, `ModalPlanoCliente`, `ModalCobranca`, `TemplatesWhatsAppTable`, `ModalTemplateWhatsApp`).
 - **Localization**: Full Brazilian Portuguese (R$, WhatsApp masks, date formats, currency formatting).
 - **Design Principles**: Mobile-first responsive design, Dark mode support, Accessibility (WCAG AA contrast, visible labels, focus indicators).
 
@@ -27,7 +27,8 @@ I prefer simple language and clear, concise explanations. I want iterative devel
   - Unified helper `callSupabase()` in `lib/api-helper.ts` for all RPC/Edge Functions
   - Consistent error handling with `ApiError` class (code, message, details)
   - All backend responses follow `{status, message, data}` format
-  - Frontend automatically receives normalized data.
+  - Frontend automatically receives normalized data
+  - Generic `ApiResponse<T>` type for type-safe RPC responses.
 - **Masks**: Brazilian masks implemented for WhatsApp, CNPJ, CEP.
 - **Testing**: `data-testid` attributes are extensively used for E2E testing with Playwright.
 - **Logout Security**: Complete cache clearing implemented to prevent data leakage between users (queryClient.clear(), state reset, localStorage cleanup after successful Supabase sign-out).
@@ -38,6 +39,7 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 - **Client Management**: List clients, CRUD operations (create, read, update, activate/deactivate), client details.
 - **Client Plans Management**: Create and manage service plans for clients (VALOR_FIXO, PACOTE, VALOR_VARIAVEL), CRUD operations, dynamic form fields.
 - **Charge Management**: Complete CRUD operations for charges, create standalone charges, list charges with Supabase integration, dynamic status calculation (EM_ABERTO, VENCIDO, PAGO, CANCELADO, FALHOU), comprehensive filters, dynamic totalizers, actions on charges (view details, send via WhatsApp, mark as paid manually, cancel).
+- **Templates WhatsApp**: Complete CRUD for WhatsApp message templates with markdown support, automatic placeholder extraction, real-time preview, tabbed interface (Editor | Preview), integrates with Supabase RPCs (`listar_templates_whatsapp`, `criar_template_whatsapp`, `atualizar_template_whatsapp`, `excluir_template_whatsapp`), automatic tipo generation via slugify, backend extracts and returns placeholders automatically.
 - **Subscription Management** (Complete Flow):
   - **Page Structure**: Two tabs (Plano Atual, Histórico) with automatic 30s polling
   - **Ativa**: Display current plan with "Mudar Plano" and "Cancelar Assinatura" actions
@@ -96,3 +98,5 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 - **TanStack Query**: Data fetching and state management.
 - **shadcn/ui**: UI component library.
 - **Tailwind CSS**: Utility-first CSS framework.
+- **react-markdown**: Markdown rendering for WhatsApp templates preview.
+- **remark-gfm**: GitHub Flavored Markdown support for template preview.

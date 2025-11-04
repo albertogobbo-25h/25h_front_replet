@@ -7,6 +7,7 @@ import {
   UserCog,
   Package,
   LogOut,
+  MessageSquare,
 } from "lucide-react";
 import {
   Sidebar,
@@ -30,6 +31,7 @@ const assinanteItems = [
   { title: "Clientes", url: "/clientes", icon: Users },
   { title: "Planos", url: "/planos", icon: Package },
   { title: "Cobranças", url: "/cobrancas", icon: FileText },
+  { title: "Templates WhatsApp", url: "/templates-whatsapp", icon: MessageSquare },
   { title: "Assinatura", url: "/assinatura", icon: CreditCard },
   { title: "Perfil", url: "/perfil", icon: Settings },
 ];
