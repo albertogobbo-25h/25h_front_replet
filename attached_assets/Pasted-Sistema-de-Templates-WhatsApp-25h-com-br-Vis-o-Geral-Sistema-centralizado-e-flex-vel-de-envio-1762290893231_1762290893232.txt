@@ -1,0 +1,461 @@
+Sistema de Templates WhatsApp - 25h.com.br
+📋 Visão Geral
+Sistema centralizado e flexível de envio de mensagens WhatsApp com templates dinâmicos armazenados no banco de dados, substituição automática de placeholders e integração via N8N.
+
+🎯 Objetivos
+Centralização: Uma única Edge Function para todas as mensagens WhatsApp
+Flexibilidade: Templates editáveis sem necessidade de deploy
+Multi-tenant: Isolamento perfeito - cada assinante pode personalizar seus templates
+Automação: Extração automática de placeholders dos templates
+Escalabilidade: Fácil adicionar novos tipos de mensagem
+🏗️ Arquitetura
+┌─────────────────────┐
+│ Trigger / Frontend  │
+└──────────┬──────────┘
+           │ {contexto, tipo, data}
+           ↓
+┌─────────────────────────────────────────┐
+│  Edge Function: enviar-mensagem-whatsapp│
+├─────────────────────────────────────────┤
+│ 1. Valida payload                       │
+│ 2. Busca template no banco              │
+│    (contexto: saas ou assinante)        │
+│ 3. Extrai e substitui {{placeholders}}  │
+│ 4. Formata payload para N8N             │
+│ 5. Envia POST para N8N                  │
+└──────────┬──────────────────────────────┘
+           │ {whats_assinante, mensagem, tipo}
+           ↓
+┌─────────────────────┐
+│ N8N Webhook         │
+│ /webhook/enviarMsg  │
+└─────────────────────┘
+           ↓
+┌─────────────────────┐
+│ WhatsApp            │
+└─────────────────────┘
+📊 Estrutura de Dados
+Tabela: app_data.template_whatsapp_saas
+Templates do sistema (mensagens institucionais).
+
+CREATE TABLE app_data.template_whatsapp_saas (
+  tipo TEXT PRIMARY KEY,                    -- 'boas_vindas', 'cobranca_vencendo', etc
+  nome TEXT NOT NULL,                       -- Nome amigável para UI
+  template_markdown TEXT NOT NULL,          -- Mensagem com {{placeholders}}
+  criado_por UUID REFERENCES auth.users(id),
+  criado_em TIMESTAMPTZ DEFAULT now(),
+  modificado_em TIMESTAMPTZ DEFAULT now()
+);
+Características:
+
+Chave primária: tipo (slug único)
+Sem campo ativo (não precisa histórico)
+Placeholders extraídos automaticamente do template_markdown
+Suporta Markdown e emojis
+Tabela: app_data.template_whatsapp_assinante
+Templates personalizados por assinante.
+
+CREATE TABLE app_data.template_whatsapp_assinante (
+  assinante_id UUID NOT NULL REFERENCES app_data.assinante(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL,
+  nome TEXT NOT NULL,
+  template_markdown TEXT NOT NULL,
+  criado_por UUID REFERENCES auth.users(id),
+  criado_em TIMESTAMPTZ DEFAULT now(),
+  modificado_em TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (assinante_id, tipo)
+);
+Características:
+
+Chave primária composta: (assinante_id, tipo)
+Isolamento por tenant via RLS
+Cada assinante pode ter template customizado para cada tipo
+🔐 Row Level Security (RLS)
+Templates SAAS
+-- Apenas admins podem gerenciar (via ind_admin = true)
+CREATE POLICY "admins_podem_ler_templates_saas"
+  ON app_data.template_whatsapp_saas
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM app_data.usuario u
+      WHERE u.id = auth.uid() AND u.ind_admin = true
+    )
+  );
+Templates Assinante
+-- Assinante vê apenas seus próprios templates
+CREATE POLICY "assinante_ve_proprios_templates"
+  ON app_data.template_whatsapp_assinante
+  FOR SELECT TO authenticated
+  USING (assinante_id = app_internal.current_assinante_id());
+🔧 Funções Disponíveis
+Funções app_internal (CRUD)
+Templates SAAS
+fn_template_whatsapp_saas_criar(tipo, nome, template_markdown)
+fn_template_whatsapp_saas_ler(tipo)
+fn_template_whatsapp_saas_atualizar(tipo, nome?, template_markdown?)
+fn_template_whatsapp_saas_excluir(tipo)
+fn_template_whatsapp_saas_listar(tipo?, nome?)
+Templates Assinante
+fn_template_whatsapp_assinante_criar(assinante_id, tipo, nome, template_markdown)
+fn_template_whatsapp_assinante_ler(assinante_id, tipo)
+fn_template_whatsapp_assinante_atualizar(assinante_id, tipo, nome?, template_markdown?)
+fn_template_whatsapp_assinante_excluir(assinante_id, tipo)
+fn_template_whatsapp_assinante_listar(assinante_id, tipo?, nome?)
+Helper
+fn_template_extrair_placeholders(template_markdown) → Retorna TEXT[]
+Extrai todos os {{placeholders}} de um template
+Exemplo: "Olá {{nome}}, valor {{valor}}" → ["nome", "valor"]
+fn_slugify(texto) → Retorna TEXT
+Converte texto em slug válido (tipo)
+Remove acentos, converte para lowercase, substitui espaços por _
+Exemplo: "Cobranças Vencendo!!!" → "cobrancas_vencendo"
+fn_garantir_tipo_unico_saas(slug_base) → Retorna TEXT
+Garante tipo único para templates SAAS, adiciona sufixo se necessário
+Exemplo: se "boas_vindas" existe → "boas_vindas_2"
+fn_garantir_tipo_unico_assinante(assinante_id, slug_base) → Retorna TEXT
+Garante tipo único para templates do assinante, adiciona sufixo se necessário
+Funções public (API Frontend)
+Para Assinantes (authenticated)
+listar_templates_whatsapp(tipo?, nome?) → Retorna templates com placeholders extraídos
+obter_template_whatsapp(tipo) → Retorna {status, message, data}
+criar_template_whatsapp(nome, template_markdown) → Tipo é gerado automaticamente via slugify
+atualizar_template_whatsapp(tipo, nome?, template_markdown?)
+excluir_template_whatsapp(tipo)
+Para Admins (ind_admin = true)
+criar_template_whatsapp_saas(nome, template_markdown) → Tipo é gerado automaticamente via slugify
+atualizar_template_whatsapp_saas(tipo, nome?, template_markdown?)
+excluir_template_whatsapp_saas(tipo)
+listar_templates_whatsapp_saas(tipo?, nome?)
+Padrão de Resposta:
+
+{
+  "status": "OK" | "ERROR",
+  "message": "Mensagem descritiva",
+  "code": "ERROR_CODE",  // Apenas em caso de erro
+  "data": {
+    "tipo": "boas_vindas",
+    "placeholders": ["nome", "whats", "link_video"],
+    "total_placeholders": 3
+  }
+}
+🔄 Geração Automática de Tipo (Slugify)
+O campo tipo é gerado automaticamente a partir do nome do template usando a função fn_slugify(). O usuário não precisa informar o tipo manualmente.
+
+Como Funciona
+Usuário informa apenas nome e template_markdown
+Sistema gera o tipo automaticamente:
+Remove acentos: "Cobrança" → "Cobranca"
+Converte para lowercase: "Cobranca" → "cobranca"
+Substitui espaços/hífens por underscore: "Cobranca Vencendo" → "cobranca_vencendo"
+Remove caracteres especiais: "Cobrança!!!" → "cobranca"
+Garante início com letra e tamanho mínimo/máximo
+Garante unicidade: Se já existe, adiciona sufixo numérico (_2, _3, etc)
+Regras Aplicadas
+✅ Apenas lowercase: caracteres a-z
+✅ Números: 0-9 permitidos
+✅ Separadores: underscore _ (normalizado)
+✅ Deve começar com letra: prefixo t_ adicionado se necessário
+✅ Comprimento: mínimo 3, máximo 64 caracteres
+✅ Unicidade garantida: sufixo _N se tipo já existe
+Exemplos de Geração
+Entrada (nome) → Saída (tipo):
+
+"Boas Vindas" → "boas_vindas"
+"Cobrança Vencendo!!!" → "cobranca_vencendo"
+"Lembrete de Aula 01" → "lembrete_de_aula_01"
+"   Teste   Espaços   " → "teste_espacos"
+"123 Teste" → "t_123_teste" (prefixo t_ adicionado)
+"Boas Vindas" (duplicado) → "boas_vindas_2"
+Implementação
+-- Frontend chama função pública apenas com nome e template
+SELECT public.criar_template_whatsapp_saas(
+  'Boas Vindas',  -- nome (entrada do usuário)
+  'Olá {{nome}}!' -- template
+);
+
+-- Backend gera tipo automaticamente
+-- Resultado: tipo = "boas_vindas"
+Funções Internas
+fn_slugify(texto) → Converte texto para slug válido
+fn_garantir_tipo_unico_saas(slug) → Garante unicidade (SAAS)
+fn_garantir_tipo_unico_assinante(assinante_id, slug) → Garante unicidade (Assinante)
+📝 Uso de Placeholders
+Sintaxe
+Placeholders usam sintaxe mustache: {{nome_do_campo}}
+
+Exemplo de Template
+🎉 Olá {{nome}}, bem-vindo(a) à plataforma 25h!
+
+Estamos muito felizes em tê-lo(a) conosco. Assista este vídeo:
+{{link_video}}
+
+Valor da assinatura: R$ {{valor}}
+Vencimento: {{vencimento}}
+
+Qualquer dúvida, estamos à disposição! 🚀
+Placeholders extraídos automaticamente: ["nome", "link_video", "valor", "vencimento"]
+
+Validação Automática
+As funções públicas:
+
+Extraem placeholders do template via regex: /\{\{(\w+)\}\}/g
+Validam se template contém pelo menos um placeholder
+Retornam lista de placeholders na resposta
+Edge Function valida se data contém todos os placeholders necessários
+🚀 Edge Function (FASE 2 - Próxima)
+Payload de Entrada
+{
+  contexto: 'saas' | 'assinante',
+  assinante_id?: string,  // Obrigatório se contexto = 'assinante'
+  tipo: string,           // Ex: 'boas_vindas'
+  whats: string,          // WhatsApp destinatário (obrigatório)
+  data: {                 // Dados do template (placeholders)
+    [key: string]: any    // Campos conforme template
+  }
+}
+Payload Enviado ao N8N
+{
+  "whats_assinante": "5551991263303",
+  "nome_assinante": "Netto",
+  "mensagem": "<texto formatado com emojis>",
+  "tipo": "boas_vindas"
+}
+🎯 Trigger de Boas-Vindas (FASE 3 - CONCLUÍDA ✅)
+Trigger automático que dispara mensagem de boas-vindas quando novo assinante é criado.
+
+📋 Pré-requisitos
+Extensão pg_net instalada:
+CREATE EXTENSION IF NOT EXISTS pg_net;
+Parâmetros de configuração criados na tabela cfg_parametros:
+
+SUPABASE_URL - URL do projeto Supabase
+SUPABASE_SERVICE_ROLE_KEY - Chave service_role para autenticação
+Template boas_vindas criado na tabela template_whatsapp_saas
+
+Parâmetro VIDEO_BOAS_VINDAS configurado em cfg_parametros
+
+Edge Function deployada (enviar-mensagem-whatsapp)
+
+🔧 Instalação
+Execute o script no SQL Editor:
+
+supabase/db_functions/triggers/configurar_ambiente.sql  # Configurar variáveis
+supabase/db_functions/triggers/trg_assinante_boas_vindas.sql  # Criar trigger
+🚀 Como Funciona
+Novo assinante criado → Trigger dispara automaticamente
+Valida WhatsApp → Se vazio, não envia (sem erro)
+Busca configurações (da tabela cfg_parametros):
+URL do Supabase (SUPABASE_URL)
+Service Role Key (SUPABASE_SERVICE_ROLE_KEY)
+Parte variável do link do YouTube (VIDEO_BOAS_VINDAS)
+Monta payload:
+{
+  "contexto": "saas",
+  "tipo": "boas_vindas",
+  "whats": "5551991263303",
+  "data": {
+    "nome": "João Silva",
+    "link_video": "https://youtu.be/dQw4w9WgXcQ"
+  }
+}
+Envia via pg_net → Edge Function → N8N → WhatsApp
+Fire-and-forget → Erros não bloqueiam criação do assinante
+🧪 Teste
+Execute o script de teste:
+
+cd tests
+node test-trigger-boas-vindas.mjs
+O teste:
+
+✅ Verifica pré-requisitos (template, parâmetro)
+✅ Cria assinante de teste
+✅ Monitora requisição pg_net
+✅ Remove assinante após confirmação
+📊 Monitoramento
+Verificar requisições pg_net:
+
+-- Últimas requisições
+SELECT id, created, status_code, content::text
+FROM net._http_response
+WHERE url LIKE '%enviar-mensagem-whatsapp%'
+ORDER BY created DESC
+LIMIT 10;
+
+-- Requisições pendentes
+SELECT *
+FROM net.http_request_queue
+WHERE url LIKE '%enviar-mensagem-whatsapp%';
+Verificar logs da função:
+
+-- Logs do PostgreSQL mostrarão NOTICE/WARNING
+-- Exemplo de log de sucesso:
+-- NOTICE: [BOAS-VINDAS] Mensagem agendada para assinante João Silva (5551991263303): request_id=123
+⚠️ Notas Importantes
+Assíncrono: O envio é agendado via pg_net (não bloqueia INSERT)
+Resiliente: Falhas no envio NÃO impedem criação do assinante
+Logs: Use NOTICE/WARNING para debug no PostgreSQL
+Segurança: SUPABASE_SERVICE_ROLE_KEY autentica via Authorization: Bearer (padrão Supabase)
+Configuração: Usa tabela cfg_parametros (compatível com Supabase managed)
+📋 Templates Iniciais
+boas_vindas (SAAS)
+🎉 Olá, {{nome}}! Bem-vindo(a) à plataforma 25h!
+
+Estamos muito felizes em tê-lo(a) conosco. Assista este vídeo rápido para começar:
+{{link_video}}
+
+Qualquer dúvida, estamos à disposição! 🚀
+Placeholders: nome, link_video
+
+🧪 Testes
+Scripts SMOKE Disponíveis
+1. tests/test-templates-whatsapp-assinante.mjs
+Testa templates de assinante (usuário comum):
+
+✅ Criar template
+✅ Obter template
+✅ Atualizar template
+✅ Listar templates
+✅ Validações (duplicado, sem placeholders)
+✅ Excluir template
+Execução:
+
+cd tests
+node test-templates-whatsapp-assinante.mjs
+2. tests/test-templates-whatsapp-saas.mjs
+Testa templates SAAS (requer admin):
+
+✅ Criar template SAAS
+✅ Atualizar template SAAS
+✅ Listar templates SAAS
+✅ Validações
+✅ Excluir template SAAS
+Requisito: Usuário deve ter ind_admin = true na tabela usuario
+
+Execução:
+
+cd tests
+node test-templates-whatsapp-saas.mjs
+3. tests/test-trigger-boas-vindas.mjs
+Testa trigger automático de boas-vindas:
+
+✅ Verifica pré-requisitos (pg_net, template, parâmetro)
+✅ Cria assinante teste (dispara trigger)
+✅ Monitora requisição pg_net
+✅ Opção de limpeza do assinante teste
+Requisitos:
+
+pg_net instalado
+Variáveis de ambiente configuradas
+Template e parâmetro existentes
+Execução:
+
+cd tests
+node test-trigger-boas-vindas.mjs
+📦 Instalação
+1. Aplicar DDL no Supabase
+Execute o conteúdo do arquivo criar_templates_whatsapp.sql no SQL Editor do Supabase Dashboard.
+
+2. Aplicar Funções CRUD
+Aplique no SQL Editor (na ordem):
+
+supabase/db_functions/app_internal/templates_whatsapp/crud_templates_saas.sql
+supabase/db_functions/app_internal/templates_whatsapp/crud_templates_assinante.sql
+3. Aplicar Funções Públicas
+Aplique no SQL Editor:
+
+supabase/db_functions/public/templates_whatsapp/listar_templates_whatsapp.sql
+supabase/db_functions/public/templates_whatsapp/obter_template_whatsapp.sql
+supabase/db_functions/public/templates_whatsapp/criar_template_whatsapp.sql
+supabase/db_functions/public/templates_whatsapp/atualizar_template_whatsapp.sql
+supabase/db_functions/public/templates_whatsapp/excluir_template_whatsapp.sql
+supabase/db_functions/public/templates_whatsapp/criar_template_whatsapp_saas.sql (funções para admins)
+4. Instalar Extensão pg_net
+CREATE EXTENSION IF NOT EXISTS pg_net;
+5. Configurar Parâmetros do Sistema
+Execute no SQL Editor (edite com seus valores reais antes):
+
+supabase/db_functions/triggers/configurar_ambiente.sql
+IMPORTANTE:
+
+Use a mesma SUPABASE_SERVICE_ROLE_KEY que está nas env vars da Edge Function
+Substitua SUPABASE_URL pela URL do seu projeto
+O script usa UPSERT (pode re-executar sem problemas)
+6. Configurar Parâmetro VIDEO_BOAS_VINDAS
+-- Execute no SQL Editor (substitua pelo ID real do vídeo)
+SELECT app_internal.fn_cfg_parametros_criar(
+  'VIDEO_BOAS_VINDAS',
+  'dQw4w9WgXcQ',  -- Parte variável do link (após https://youtu.be/)
+  'Link do vídeo de boas-vindas para novos assinantes',
+  'WHATSAPP'
+);
+7. Criar Trigger de Boas-Vindas
+Execute no SQL Editor:
+
+supabase/db_functions/triggers/trg_assinante_boas_vindas.sql
+8. Rodar Testes
+cd tests
+npm install
+node test-templates-whatsapp-assinante.mjs   # Templates assinante
+node test-templates-whatsapp-saas.mjs        # Templates SAAS (admin)
+node test-trigger-boas-vindas.mjs            # Trigger automático
+🔮 Casos de Uso Futuros
+Este sistema suporta facilmente:
+
+✉️ Cobranças vencendo
+🎂 Mensagens de aniversário
+⏰ Lembretes de agendamento
+✅ Confirmações de pagamento
+❌ Cancelamentos
+📊 Relatórios mensais
+🎁 Promoções
+🔔 Notificações personalizadas por assinante
+✅ Status Atual - TODAS AS FASES CONCLUÍDAS! 🎉
+FASE 1 - CONCLUÍDA ✅
+ Tabelas criadas (template_whatsapp_saas, template_whatsapp_assinante)
+ RLS configurado (isolamento por assinante)
+ Funções CRUD implementadas (app_internal)
+ Funções públicas implementadas (public schema)
+ Template inicial de boas-vindas
+ Scripts SMOKE test funcionais
+ Validação automática de placeholders
+ Geração automática de tipo (slugify)
+ Documentação completa
+FASE 2 - CONCLUÍDA ✅
+ Edge Function enviar-mensagem-whatsapp criada
+ Suporte a templates SAAS e Assinante
+ Substituição automática de placeholders
+ Validação de payload e campos obrigatórios
+ Integração com N8N via webhook
+ Autenticação por JWT (frontend) e secret (interno)
+ Padrão de resposta unificado
+ Tratamento robusto de erros
+ Scripts de teste
+FASE 3 - CONCLUÍDA ✅
+ Extensão pg_net configurada
+ Trigger trg_assinante_boas_vindas criado
+ Função fn_notificar_boas_vindas() implementada
+ Configuração de variáveis de ambiente (PostgreSQL)
+ Integração com parâmetro VIDEO_BOAS_VINDAS
+ Envio assíncrono via pg_net (fire-and-forget)
+ Tratamento de erros (não bloqueia INSERT)
+ Script de teste da trigger
+ Documentação de monitoramento
+🔮 Próximos Passos (Futuro)
+Este sistema está pronto para produção e pode ser facilmente expandido para:
+
+✉️ Cobranças vencendo → Criar template + trigger em assinatura_cobranca
+🎂 Aniversários → Criar template + job agendado (N8N)
+⏰ Lembretes de agendamento → Criar template + trigger em evento
+✅ Confirmações de pagamento → Criar template + webhook
+❌ Cancelamentos → Criar template + trigger
+📊 Relatórios mensais → Criar template + job agendado
+🎁 Promoções → Criar template + envio manual/programado
+💡 Observações Técnicas
+Templates mantêm Markdown e emojis intactos
+Placeholders no formato {{campo}} (mustache-like)
+Extração via regex: /\{\{(\w+)\}\}/g
+N8N recebe mensagem já formatada (pronta para enviar)
+Falhas no envio não interrompem criação de assinante (fire-and-forget)
+RLS garante isolamento de templates entre assinantes
+Validação de placeholders em tempo de criação/atualização
