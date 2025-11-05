@@ -20,13 +20,10 @@ import TemplatesWhatsApp from "@/pages/TemplatesWhatsApp";
 import NotFound from "@/pages/not-found";
 
 function Router() {
-  const { user, loading } = useAuth();
+  const { user, loading, isAdmin } = useAuth();
   
   // Verificar se precisa de onboarding (usuário não tem nome salvo)
   const needsOnboarding = user && !user.user_metadata?.onboarding_completed;
-  
-  // TODO: Implementar verificação de admin real
-  const isAdmin = false;
 
   if (loading) {
     return (

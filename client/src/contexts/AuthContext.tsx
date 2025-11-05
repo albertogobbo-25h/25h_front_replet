@@ -3,11 +3,14 @@ import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { callSupabase, ApiError } from '@/lib/api-helper';
 import { queryClient } from '@/lib/queryClient';
+import type { UserRole } from '@/types/roles';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   assinanteId: string | null;
+  roles: UserRole[];
+  isAdmin: boolean;
   loading: boolean;
   signUp: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
@@ -21,9 +24,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [assinanteId, setAssinanteId] = useState<string | null>(null);
+  const [roles, setRoles] = useState<UserRole[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Buscar assinante_id quando o usuário estiver logado
+  // Buscar assinante_id e roles quando o usuário estiver logado
   const fetchAssinanteId = async () => {
     try {
       const dados = await callSupabase<{ id: string }>( async () =>
@@ -48,6 +52,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const fetchUserRoles = async () => {
+    try {
+      const { data, error } = await supabase
+        .schema('app_data')
+        .from('usuario_funcao')
+        .select('funcao')
+        .eq('usuario_id', user?.id);
+
+      if (error) throw error;
+
+      const userRoles = (data || []).map((r: { funcao: UserRole }) => r.funcao);
+      setRoles(userRoles);
+    } catch (error) {
+      console.error('❌ Erro ao buscar roles do usuário:', error);
+      setRoles([]);
+    }
+  };
+
   useEffect(() => {
     // Verificar sessão atual
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -56,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (session?.user) {
         fetchAssinanteId();
+        fetchUserRoles();
       }
       
       setLoading(false);
@@ -70,8 +93,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (session?.user) {
         fetchAssinanteId();
+        fetchUserRoles();
       } else {
         setAssinanteId(null);
+        setRoles([]);
       }
       
       setLoading(false);
@@ -123,6 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAssinanteId(null);
       setUser(null);
       setSession(null);
+      setRoles([]);
       
       // Limpar possíveis dados em localStorage relacionados ao TanStack Query
       localStorage.removeItem('REACT_QUERY_OFFLINE_CACHE');
@@ -134,12 +160,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const isAdmin = roles.includes('ADMIN');
+
   return (
     <AuthContext.Provider
       value={{
         user,
         session,
         assinanteId,
+        roles,
+        isAdmin,
         loading,
         signUp,
         signIn,
