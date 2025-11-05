@@ -54,19 +54,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUserRoles = async (userId: string) => {
     try {
-      const { data, error } = await supabase
-        .schema('app_data')
-        .from('usuario_funcao')
-        .select('funcao')
-        .eq('usuario_id', userId);
+      // NOTA: A RPC 'obter_funcoes_usuario' deve ser criada no backend Supabase
+      // Enquanto isso, usar implementação alternativa:
+      // Buscar roles através da tabela de metadados do usuário
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      
+      if (userError) throw userError;
 
-      if (error) throw error;
+      // Os roles podem estar armazenados nos metadados do usuário
+      // ou podemos usar uma lógica temporária
+      const userMetadata = userData.user?.user_metadata;
+      const userRoles: UserRole[] = [];
 
-      const userRoles = (data || []).map((r: { funcao: UserRole }) => r.funcao);
+      // Verificar se o usuário tem roles nos metadados
+      if (userMetadata?.roles) {
+        userRoles.push(...userMetadata.roles);
+      } else {
+        // Por padrão, todos os usuários são PROFISSIONAL
+        userRoles.push('PROFISSIONAL');
+        
+        // TODO: Implementar lógica real quando a RPC estiver disponível
+        // Por enquanto, detectar admin através de email ou outro critério
+        if (userMetadata?.is_admin) {
+          userRoles.push('ADMIN');
+        }
+      }
+
       setRoles(userRoles);
     } catch (error) {
       console.error('❌ Erro ao buscar roles do usuário:', error);
-      setRoles([]);
+      // Por padrão, dar role PROFISSIONAL
+      setRoles(['PROFISSIONAL']);
     }
   };
 

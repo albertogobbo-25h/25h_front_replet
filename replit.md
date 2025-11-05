@@ -82,7 +82,7 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 - **Form Protection**: User input in critical forms is protected against accidental resets.
 - **Business Rule**: The system exclusively supports Pessoa Jurídica (CNPJ).
 - **Edge Functions**: All Supabase Edge Function calls use `supabase.functions.invoke()` for automatic URL resolution, authentication header injection, and consistent error handling. Edge Functions used: `iniciar_pagto_assinante`, `cancelar_assinatura`, `enviar-mensagem-whatsapp`.
-- **Role Management**: User roles fetched from `app_data.usuario_funcao` table on login, stored in AuthContext, used for conditional UI rendering and route protection.
+- **Role Management**: User roles fetched via RPC `obter_funcoes_usuario` on login (app_data schema not directly accessible via REST), stored in AuthContext, used for conditional UI rendering and route protection. **NOTA**: RPC `obter_funcoes_usuario` deve ser criada no backend (ver BACKEND_TODO.md). Implementação temporária usa user_metadata.roles ou user_metadata.is_admin, com fallback para role PROFISSIONAL.
 - **Subscription Business Rules**:
   - **Coexistence**: Can have one ATIVA and one PENDENTE subscription simultaneously (upgrade/renewal scenario)
   - **Activation by Payment**: When payment is confirmed, PENDENTE becomes ATIVA and previous ATIVA is cancelled
