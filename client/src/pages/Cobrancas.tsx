@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import CobrancaTable from "@/components/CobrancaTable";
 import ModalCobranca from "@/components/ModalCobranca";
+import ModalEnviarWhatsApp from "@/components/ModalEnviarWhatsApp";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -27,6 +28,8 @@ export default function Cobrancas() {
   const [modalNovaCobrancaOpen, setModalNovaCobrancaOpen] = useState(false);
   const [cobrancaSelecionada, setCobrancaSelecionada] = useState<CobrancaComCliente | null>(null);
   const [detalhesOpen, setDetalhesOpen] = useState(false);
+  const [modalWhatsAppOpen, setModalWhatsAppOpen] = useState(false);
+  const [cobrancaParaWhatsApp, setCobrancaParaWhatsApp] = useState<CobrancaComCliente | null>(null);
 
   // Calcular range de datas baseado no filtro de período
   const getDateRange = () => {
@@ -70,7 +73,8 @@ export default function Cobrancas() {
           cliente:cliente_id (
             id,
             nome,
-            nome_visualizacao
+            nome_visualizacao,
+            whatsapp
           )
         `)
         .gte('data_vencimento', dataInicio)
@@ -209,16 +213,8 @@ export default function Cobrancas() {
   };
 
   const handleEnviarWhatsApp = (cobranca: CobrancaComCliente) => {
-    const mensagem = `Olá! Você tem uma cobrança pendente:\n\nDescrição: ${cobranca.descricao}\nValor: ${formatCurrency(Number(cobranca.valor_total))}\nVencimento: ${formatDate(cobranca.data_vencimento)}`;
-    
-    // TODO: Integrar com API de WhatsApp real quando disponível
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
-    window.open(whatsappUrl, '_blank');
-
-    toast({
-      title: 'Link do WhatsApp gerado',
-      description: 'Use o link para enviar a cobrança',
-    });
+    setCobrancaParaWhatsApp(cobranca);
+    setModalWhatsAppOpen(true);
   };
 
   const handleModalSuccess = () => {
@@ -462,6 +458,32 @@ export default function Cobrancas() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Modal Enviar WhatsApp */}
+      {cobrancaParaWhatsApp && (
+        <ModalEnviarWhatsApp
+          open={modalWhatsAppOpen}
+          onClose={() => {
+            setModalWhatsAppOpen(false);
+            setCobrancaParaWhatsApp(null);
+          }}
+          destinatario={{
+            nome: cobrancaParaWhatsApp.cliente?.nome || 'Cliente',
+            whatsapp: cobrancaParaWhatsApp.cliente?.whatsapp || '',
+          }}
+          dadosCobranca={{
+            descricao: cobrancaParaWhatsApp.descricao,
+            valor: formatCurrency(Number(cobrancaParaWhatsApp.valor_total)),
+            vencimento: formatDate(cobrancaParaWhatsApp.data_vencimento),
+            referencia_mes: cobrancaParaWhatsApp.referencia_mes
+              ? new Date(cobrancaParaWhatsApp.referencia_mes).toLocaleDateString('pt-BR', {
+                  month: 'long',
+                  year: 'numeric',
+                })
+              : undefined,
+          }}
+        />
+      )}
     </div>
   );
 }

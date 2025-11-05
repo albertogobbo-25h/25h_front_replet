@@ -17,6 +17,9 @@ import Cobrancas from "@/pages/Cobrancas";
 import Assinatura from "@/pages/Assinatura";
 import Perfil from "@/pages/Perfil";
 import TemplatesWhatsApp from "@/pages/TemplatesWhatsApp";
+import AdminDashboard from "@/pages/admin/AdminDashboard";
+import AdminAssinantes from "@/pages/admin/AdminAssinantes";
+import AdminPlanos from "@/pages/admin/AdminPlanos";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -64,6 +67,9 @@ function Router() {
               <Route path="/assinatura" component={Assinatura} />
               <Route path="/templates-whatsapp" component={TemplatesWhatsApp} />
               <Route path="/perfil" component={Perfil} />
+              <Route path="/admin/dashboard" component={AdminDashboard} />
+              <Route path="/admin/assinantes" component={AdminAssinantes} />
+              <Route path="/admin/planos" component={AdminPlanos} />
               <Route component={NotFound} />
             </Switch>
           </main>

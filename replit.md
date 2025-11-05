@@ -11,13 +11,13 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 ### UI/UX Decisions
 - **Color Scheme**: Professional blue (`hsl(217, 91%, 60%)`) as primary, with distinct colors for success, warning, and destructive actions.
 - **Typography**: Inter for general UI, Roboto Mono for financial values and dates.
-- **Components**: Utilizes `shadcn/ui` for standardized components (`DashboardKPICard`, `StatusBadge`, `ClienteTable`, `CobrancaTable`, `AppSidebar`, `PlanCard`, `ModalCliente`, `ModalPlanoCliente`, `ModalCobranca`, `TemplatesWhatsAppTable`, `ModalTemplateWhatsApp`).
+- **Components**: Utilizes `shadcn/ui` for standardized components (`DashboardKPICard`, `StatusBadge`, `ClienteTable`, `CobrancaTable`, `AppSidebar`, `PlanCard`, `ModalCliente`, `ModalPlanoCliente`, `ModalCobranca`, `TemplatesWhatsAppTable`, `ModalTemplateWhatsApp`, `ModalEnviarWhatsApp`, `ProtectedRoute`).
 - **Localization**: Full Brazilian Portuguese (R$, WhatsApp masks, date formats, currency formatting).
 - **Design Principles**: Mobile-first responsive design, Dark mode support, Accessibility (WCAG AA contrast, visible labels, focus indicators).
 
 ### Technical Implementations
 - **Frontend**: React, TypeScript, Vite, Tailwind CSS, Wouter for routing, TanStack Query v5 for state management.
-- **Authentication**: Supabase (email/password, Google OAuth, session management, user metadata for onboarding, assinante_id in AuthContext).
+- **Authentication**: Supabase (email/password, Google OAuth, session management, user metadata for onboarding, assinante_id and roles in AuthContext, role-based access control).
 - **Subscription Management**: Complete flow including plan selection, cadastral data validation, Pluggy PIX payment integration, conditional statuses, automatic polling, upgrade, and cancellation flows.
 - **Data Management**:
   - Supabase PostgreSQL with multi-tenancy (app_data schema)
@@ -34,12 +34,14 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 - **Logout Security**: Complete cache clearing implemented to prevent data leakage between users (queryClient.clear(), state reset, localStorage cleanup after successful Supabase sign-out).
 
 ### Feature Specifications
-- **Authentication**: Login/Signup, onboarding with name and WhatsApp, automatic Free plan creation on signup, session management, route protection.
+- **Authentication**: Login/Signup, onboarding with name and WhatsApp, automatic Free plan creation on signup, session management, route protection, role-based access control (ADMIN, PROFISSIONAL, CLIENTE).
 - **Dashboard**: KPI cards (revenue, clients, charges), recent charges table, trend indicators.
 - **Client Management**: List clients, CRUD operations (create, read, update, activate/deactivate), client details.
 - **Client Plans Management**: Create and manage service plans for clients (VALOR_FIXO, PACOTE, VALOR_VARIAVEL), CRUD operations, dynamic form fields.
-- **Charge Management**: Complete CRUD operations for charges, create standalone charges, list charges with Supabase integration, dynamic status calculation (EM_ABERTO, VENCIDO, PAGO, CANCELADO, FALHOU), comprehensive filters, dynamic totalizers, actions on charges (view details, send via WhatsApp, mark as paid manually, cancel).
+- **Charge Management**: Complete CRUD operations for charges, create standalone charges, list charges with Supabase integration, dynamic status calculation (EM_ABERTO, VENCIDO, PAGO, CANCELADO, FALHOU), comprehensive filters, dynamic totalizers, actions on charges (view details, send via WhatsApp with template selection, mark as paid manually, cancel).
 - **Templates WhatsApp**: Complete CRUD for WhatsApp message templates with markdown support, automatic placeholder extraction, real-time preview, tabbed interface (Editor | Preview), integrates with Supabase RPCs (`listar_templates_whatsapp`, `criar_template_whatsapp`, `atualizar_template_whatsapp`, `excluir_template_whatsapp`), automatic tipo generation via slugify, backend extracts and returns placeholders automatically.
+- **WhatsApp Integration**: Send messages via Edge Function `enviar-mensagem-whatsapp`, template selection modal, automatic placeholder filling with charge data, preview before sending.
+- **Admin Panel**: Protected admin routes requiring ADMIN role, admin dashboard with system metrics, assinantes management, planos management, conditional sidebar menu based on user roles.
 - **Subscription Management** (Complete Flow):
   - **Page Structure**: Two tabs (Plano Atual, Histórico) with automatic 30s polling
   - **Ativa**: Display current plan with "Mudar Plano" and "Cancelar Assinatura" actions
@@ -79,7 +81,8 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 - **Data Formatting**: Cadastral data is unformatted before backend transmission and formatted for frontend display.
 - **Form Protection**: User input in critical forms is protected against accidental resets.
 - **Business Rule**: The system exclusively supports Pessoa Jurídica (CNPJ).
-- **Edge Functions**: All Supabase Edge Function calls use `supabase.functions.invoke()` for automatic URL resolution, authentication header injection, and consistent error handling.
+- **Edge Functions**: All Supabase Edge Function calls use `supabase.functions.invoke()` for automatic URL resolution, authentication header injection, and consistent error handling. Edge Functions used: `iniciar_pagto_assinante`, `cancelar_assinatura`, `enviar-mensagem-whatsapp`.
+- **Role Management**: User roles fetched from `app_data.usuario_funcao` table on login, stored in AuthContext, used for conditional UI rendering and route protection.
 - **Subscription Business Rules**:
   - **Coexistence**: Can have one ATIVA and one PENDENTE subscription simultaneously (upgrade/renewal scenario)
   - **Activation by Payment**: When payment is confirmed, PENDENTE becomes ATIVA and previous ATIVA is cancelled

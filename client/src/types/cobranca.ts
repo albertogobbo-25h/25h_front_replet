@@ -32,6 +32,7 @@ export interface CobrancaComCliente extends Cobranca {
     id: string;
     nome: string;
     nome_visualizacao: string | null;
+    whatsapp: string | null;
   };
 }
 

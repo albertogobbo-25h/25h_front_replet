@@ -52,13 +52,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const fetchUserRoles = async () => {
+  const fetchUserRoles = async (userId: string) => {
     try {
       const { data, error } = await supabase
         .schema('app_data')
         .from('usuario_funcao')
         .select('funcao')
-        .eq('usuario_id', user?.id);
+        .eq('usuario_id', userId);
 
       if (error) throw error;
 
@@ -78,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (session?.user) {
         fetchAssinanteId();
-        fetchUserRoles();
+        fetchUserRoles(session.user.id);
       }
       
       setLoading(false);
@@ -93,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (session?.user) {
         fetchAssinanteId();
-        fetchUserRoles();
+        fetchUserRoles(session.user.id);
       } else {
         setAssinanteId(null);
         setRoles([]);
