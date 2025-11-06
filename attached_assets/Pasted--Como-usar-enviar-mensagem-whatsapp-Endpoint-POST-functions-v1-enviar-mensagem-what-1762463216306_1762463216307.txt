@@ -1,0 +1,129 @@
+# Como usar: enviar-mensagem-whatsapp
+
+## Endpoint
+
+```
+POST /functions/v1/enviar-mensagem-whatsapp
+```
+
+## Autenticação
+
+Require token JWT do usuário no header:
+
+```
+Authorization: Bearer {jwt_token}
+```
+
+## Payload
+
+### Template SAAS (institucional)
+
+```json
+{
+  "contexto": "saas",
+  "tipo": "boas_vindas",
+  "whats": "5551991263303",
+  "data": {
+    "nome": "João Silva",
+    "link_video": "https://youtube.com/..."
+  }
+}
+```
+
+### Template Assinante (personalizado)
+
+```json
+{
+  "contexto": "assinante",
+  "assinante_id": "uuid-do-assinante",
+  "tipo": "cobranca_vencendo",
+  "whats": "5551999887766",
+  "data": {
+    "cliente_nome": "Maria",
+    "valor": "150,00",
+    "vencimento": "25/10/2025"
+  }
+}
+```
+
+### Campos obrigatórios
+
+- `contexto`: `"saas"` ou `"assinante"`
+- `tipo`: string identificando o template (ex: `"boas_vindas"`, `"cobranca_vencendo"`)
+- `whats`: número do WhatsApp (10-15 dígitos, apenas números)
+- `data`: objeto com os valores para substituir os placeholders `{{campo}}` do template
+- `assinante_id`: obrigatório apenas se `contexto = "assinante"`
+
+## Exemplo de uso (TypeScript)
+
+```typescript
+const { data, error } = await supabase.functions.invoke('enviar-mensagem-whatsapp', {
+  body: {
+    contexto: 'assinante',
+    assinante_id: assinanteId,
+    tipo: 'cobranca_vencendo',
+    whats: '5551999887766',
+    data: {
+      cliente_nome: 'Maria',
+      valor: '150,00',
+      vencimento: '25/10/2025'
+    }
+  }
+})
+
+if (error) {
+  console.error('Erro:', error)
+  return
+}
+
+if (data.status === 'OK') {
+  console.log('Mensagem enviada:', data.data)
+} else {
+  console.error('Erro:', data.code, data.message)
+}
+```
+
+## Resposta
+
+### Sucesso
+
+```json
+{
+  "status": "OK",
+  "message": "Mensagem enviada com sucesso",
+  "data": {
+    "template_usado": "Boas Vindas",
+    "tipo": "boas_vindas",
+    "destinatario": "5551991263303",
+    "instancia": "Kate_25h",
+    "tempo_processamento_ms": 1234
+  }
+}
+```
+
+### Erro
+
+```json
+{
+  "status": "ERROR",
+  "code": "TEMPLATE_NAO_ENCONTRADO",
+  "message": "Template SAAS \"boas_vindas\" não encontrado"
+}
+```
+
+## Códigos de erro
+
+| Código | Descrição |
+|--------|-----------|
+| `UNAUTHORIZED` | Token não fornecido ou inválido |
+| `INVALID_PAYLOAD` | Payload inválido ou campos obrigatórios faltando |
+| `TEMPLATE_NAO_ENCONTRADO` | Template não existe no banco |
+| `PLACEHOLDER_ERROR` | Campo do template faltando no `data` |
+| `N8N_ERROR` | Erro ao enviar para N8N |
+| `INTERNAL_ERROR` | Erro interno do servidor |
+
+## Observações
+
+- O número do WhatsApp é normalizado automaticamente (adiciona código do país `55` se necessário)
+- Todos os campos do template devem estar presentes no objeto `data`
+- O formato do WhatsApp aceita apenas números (10-15 dígitos)
