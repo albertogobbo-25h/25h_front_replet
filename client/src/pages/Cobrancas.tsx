@@ -471,7 +471,9 @@ export default function Cobrancas() {
             nome: cobrancaParaWhatsApp.cliente?.nome || 'Cliente',
             whatsapp: cobrancaParaWhatsApp.cliente?.whatsapp || '',
           }}
+          contexto="assinante"
           dadosCobranca={{
+            cliente_nome: cobrancaParaWhatsApp.cliente?.nome || 'Cliente',
             descricao: cobrancaParaWhatsApp.descricao,
             valor: formatCurrency(Number(cobrancaParaWhatsApp.valor_total)),
             vencimento: formatDate(cobrancaParaWhatsApp.data_vencimento),

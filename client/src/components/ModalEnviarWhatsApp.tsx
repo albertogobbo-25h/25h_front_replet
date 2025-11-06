@@ -25,6 +25,7 @@ import type { TemplateWhatsApp, ApiResponse } from "@/types/template-whatsapp";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { callSupabase } from "@/lib/api-helper";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ModalEnviarWhatsAppProps {
   open: boolean;
@@ -45,6 +46,7 @@ export default function ModalEnviarWhatsApp({
   contexto = 'saas'
 }: ModalEnviarWhatsAppProps) {
   const { toast } = useToast();
+  const { assinanteId } = useAuth();
   const [templateSelecionado, setTemplateSelecionado] = useState<string>("");
   const [previewMessage, setPreviewMessage] = useState<string>("");
 
@@ -87,21 +89,37 @@ export default function ModalEnviarWhatsApp({
         throw new Error('Selecione um template');
       }
 
+      // Normalizar número WhatsApp (remover formatação, deixar apenas números)
+      const whatsNormalizado = destinatario.whatsapp.replace(/\D/g, '');
+
+      // Construir payload base
+      const payload: any = {
+        contexto,
+        tipo: templateSelecionado,
+        whats: whatsNormalizado,
+        data: {
+          nome: destinatario.nome,
+          ...dadosCobranca,
+        }
+      };
+
+      // Adicionar assinante_id se contexto for "assinante"
+      if (contexto === 'assinante') {
+        if (!assinanteId) {
+          throw new Error('ID do assinante não encontrado. Faça login novamente.');
+        }
+        payload.assinante_id = assinanteId;
+      }
+
       const result = await callSupabase<{
         template_usado: string;
+        tipo: string;
         destinatario: string;
+        instancia: string;
         tempo_processamento_ms: number;
       }>(
         () => supabase.functions.invoke('enviar-mensagem-whatsapp', {
-          body: {
-            contexto,
-            tipo: templateSelecionado,
-            whats: destinatario.whatsapp,
-            data: {
-              nome: destinatario.nome,
-              ...dadosCobranca,
-            }
-          }
+          body: payload
         }),
         'enviar-mensagem-whatsapp'
       );
@@ -115,11 +133,24 @@ export default function ModalEnviarWhatsApp({
       });
       onClose();
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
+      // Mapear códigos de erro da Edge Function para mensagens amigáveis
+      const errorMessages: Record<string, string> = {
+        'UNAUTHORIZED': 'Você não está autorizado. Faça login novamente.',
+        'INVALID_PAYLOAD': 'Dados inválidos. Verifique as informações e tente novamente.',
+        'TEMPLATE_NAO_ENCONTRADO': 'Template não encontrado. Selecione outro template.',
+        'PLACEHOLDER_ERROR': 'Faltam dados obrigatórios no template. Verifique os placeholders.',
+        'N8N_ERROR': 'Erro ao enviar mensagem. Tente novamente em alguns instantes.',
+        'INTERNAL_ERROR': 'Erro interno do servidor. Tente novamente mais tarde.',
+      };
+
+      const errorCode = error?.code || 'UNKNOWN_ERROR';
+      const errorMessage = errorMessages[errorCode] || error?.message || 'Erro desconhecido ao enviar mensagem';
+
       toast({
         variant: "destructive",
         title: "Erro ao enviar mensagem",
-        description: error.message,
+        description: errorMessage,
       });
     },
   });
@@ -150,9 +181,9 @@ export default function ModalEnviarWhatsApp({
       ...dadosCobranca,
     };
 
-    // Substituir cada placeholder
+    // Substituir cada placeholder (formato: {{campo}})
     Object.entries(dados).forEach(([key, value]) => {
-      const placeholder = new RegExp(`{{${key}}}`, 'g');
+      const placeholder = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
       mensagem = mensagem.replace(placeholder, String(value || ''));
     });
 
