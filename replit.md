@@ -42,6 +42,7 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 - **Templates WhatsApp**: Complete CRUD for WhatsApp message templates with markdown support, automatic placeholder extraction, real-time preview, tabbed interface (Editor | Preview), integrates with Supabase RPCs (`listar_templates_whatsapp`, `criar_template_whatsapp`, `atualizar_template_whatsapp`, `excluir_template_whatsapp`), automatic tipo generation via slugify, backend extracts and returns placeholders automatically.
 - **WhatsApp Integration**: Send messages via Edge Function `enviar-mensagem-whatsapp`, template selection modal, automatic placeholder filling with charge data, preview before sending. Supports two contexts: `saas` (institutional templates) and `assinante` (custom subscriber templates). WhatsApp number automatically normalized, assinante_id automatically injected for assinante context.
 - **Admin Panel**: Protected admin routes requiring ADMIN role, admin dashboard with system metrics, assinantes management, planos management, conditional sidebar menu based on user roles.
+- **Public Payment Page**: Unauthenticated page accessible via `/pagar?c={cobranca_id}` for clients to view charge details and select payment method (PIX Automático or PIX Imediato). Uses RPC `consultar_cobranca_publica` for secure data retrieval without exposing sensitive information. Displays status badges (Pago/Cancelado/Em Aberto/Vencido), charge details (beneficiary, value, due date), and payment form. Currently implements UI only (payment confirmation is stub for future integration).
 - **Subscription Management** (Complete Flow):
   - **Page Structure**: Two tabs (Plano Atual, Histórico) with automatic 30s polling
   - **Ativa**: Display current plan with "Mudar Plano" and "Cancelar Assinatura" actions
@@ -62,6 +63,7 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 - **Profile**: Complete integration with Supabase RPCs (`obter_dados_assinante`, `atualizar_dados_assinante`), real-time data loading, CNPJ-only validation, fields (Razão Social, Nome Fantasia, CNPJ, Email, WhatsApp, full address), Brazilian masks, loading states and error handling.
 
 ### System Design Choices
+- **Public Routes**: Page `/pagar?c={uuid}` bypasses authentication check in `App.tsx` using early return pattern before AuthContext validation. Uses Supabase anon key for secure RPC call to `consultar_cobranca_publica`.
 - **Onboarding Flow** (Detailed):
   1. User signs up/logs in via Supabase Auth
   2. Frontend calls `processar_pos_login(p_nome?, p_whatsapp?)`

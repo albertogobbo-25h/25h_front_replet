@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -20,10 +20,17 @@ import TemplatesWhatsApp from "@/pages/TemplatesWhatsApp";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminAssinantes from "@/pages/admin/AdminAssinantes";
 import AdminPlanos from "@/pages/admin/AdminPlanos";
+import PagamentoPublico from "@/pages/PagamentoPublico";
 import NotFound from "@/pages/not-found";
 
 function Router() {
+  const [location] = useLocation();
   const { user, loading, isAdmin } = useAuth();
+  
+  // Rotas públicas que não precisam de autenticação
+  if (location.startsWith('/pagar')) {
+    return <PagamentoPublico />;
+  }
   
   // Verificar se precisa de onboarding (usuário não tem nome salvo)
   const needsOnboarding = user && !user.user_metadata?.onboarding_completed;
