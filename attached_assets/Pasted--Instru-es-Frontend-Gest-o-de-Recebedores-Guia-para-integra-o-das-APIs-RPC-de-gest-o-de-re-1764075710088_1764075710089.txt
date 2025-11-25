@@ -1,0 +1,2079 @@
+# Instruções Frontend - Gestão de Recebedores
+
+> Guia para integração das APIs RPC de gestão de recebedores no frontend
+
+---
+
+## 📋 Visão Geral
+
+O módulo de recebedores permite que o assinante configure a conta bancária onde receberá os pagamentos dos clientes via Pluggy.
+
+**Importante:** 
+- **Consultas** são feitas via **RPC** (simples, rápidas, síncronas)
+- **Criação/ativação** é feita via **Edge Function** (integra com Pluggy via N8N)
+
+---
+
+## 🗂️ Resumo dos Endpoints
+
+| Tipo | Nome | Método | Uso | Integra Pluggy? |
+|------|------|--------|-----|-----------------|
+| RPC | `obter_recebedor_ativo()` | - | Consultar conta ativa | ❌ |
+| RPC | `listar_recebedores(somente_ativos?)` | - | Listar histórico | ❌ |
+| RPC | `listar_instituicoes_financeiras(busca?, limit?, offset?)` | - | Listar bancos para select | ❌ |
+| Edge Function | `cadastrar_recebedor` | POST | Criar nova conta | ✅ Via N8N |
+| Edge Function | `ativar_recebedor` | POST | Ativar/reativar conta | ✅ Se necessário |
+
+**Fluxo típico:**
+1. Frontend lista recebedores com `listar_recebedores()` (validação local)
+2. Frontend chama `cadastrar_recebedor` (Edge Function → N8N → Pluggy)
+3. Se falhar, frontend chama `ativar_recebedor` com `recebedor_id` retornado
+4. Frontend atualiza UI chamando `obter_recebedor_ativo()`
+
+---
+
+## 📦 Recursos Disponíveis
+
+### APIs RPC (Consulta)
+1. `obter_recebedor_ativo()` - Consulta conta ativa
+2. `listar_recebedores()` - Lista histórico (use para validação local também)
+3. `listar_instituicoes_financeiras()` - Lista bancos para select de cadastro (com busca e paginação)
+
+### Edge Functions (Ações)
+1. `cadastrar_recebedor` - Cria nova conta (banco + Pluggy via N8N)
+2. `ativar_recebedor` - Ativa/reativa conta existente
+
+---
+
+## 🔐 Pré-requisito: Autenticação
+
+**TODAS as APIs exigem usuário autenticado.** O Supabase client passa automaticamente o token quando há sessão ativa.
+
+### Verificar Autenticação
+
+```typescript
+import { supabase } from '@/lib/supabase'
+
+// Verificar se usuário está autenticado
+const { data: { user } } = await supabase.auth.getUser()
+
+if (!user) {
+  // Redirecionar para login
+  router.push('/login')
+  return
+}
+
+// Usuário autenticado, pode usar as APIs
+```
+
+### Exemplo de Setup Inicial
+
+```typescript
+// Em um componente protegido (ex: /dashboard/recebimento)
+useEffect(() => {
+  const checkAuth = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      router.push('/login')
+    }
+  }
+  
+  checkAuth()
+}, [])
+```
+
+---
+
+### 1. Obter Recebedor Ativo
+
+**Função:** `obter_recebedor_ativo()`  
+**Uso:** Exibir conta ativa na página de configurações  
+**Requer:** 🔐 Usuário autenticado
+
+#### Exemplo TypeScript
+
+```typescript
+import { supabase } from '@/lib/supabase'
+
+async function obterRecebedorAtivo() {
+  const { data, error } = await supabase.rpc('obter_recebedor_ativo')
+  
+  if (error) {
+    console.error('Erro ao obter recebedor:', error)
+    return null
+  }
+
+  // Estrutura da resposta
+  console.log(data)
+  // {
+  //   status: "OK",
+  //   message: "Recebedor ativo obtido com sucesso",
+  //   data: {
+  //     recebedor: {
+  //       id: "uuid",
+  //       gateway_id: "uuid",
+  //       id_recebedor_gateway: "pluggy-recipient-id",
+  //       instituicao_id: "uuid-instituicao",
+  //       instituicao_nome: "Banco do Brasil",
+  //       agencia: "0001",
+  //       conta: "12345",
+  //       tipo_conta: "CHECKING_ACCOUNT",
+  //       ind_ativo: true,
+  //       criado_em: "2024-01-01T00:00:00Z",
+  //       modificado_em: "2024-01-01T00:00:00Z"
+  //     }
+  //   }
+  // }
+
+  return data.data.recebedor
+}
+```
+
+#### Exemplo React Component
+
+```tsx
+'use client'
+
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+interface Recebedor {
+  id: string
+  instituicao_nome: string
+  agencia: string
+  conta: string
+  tipo_conta: 'CHECKING_ACCOUNT' | 'SAVINGS_ACCOUNT'
+  ind_ativo: boolean
+}
+
+export function RecebedorAtivo() {
+  const [recebedor, setRecebedor] = useState<Recebedor | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function carregar() {
+      const { data, error } = await supabase.rpc('obter_recebedor_ativo')
+      
+      if (!error && data.status === 'OK') {
+        setRecebedor(data.data.recebedor)
+      }
+      
+      setLoading(false)
+    }
+    
+    carregar()
+  }, [])
+
+  if (loading) return <p>Carregando...</p>
+  
+  if (!recebedor) {
+    return (
+      <div className="alert alert-warning">
+        <p>Nenhuma conta configurada.</p>
+        <button>Cadastrar Conta</button>
+      </div>
+    )
+  }
+
+  const tipoConta = recebedor.tipo_conta === 'CHECKING_ACCOUNT' 
+    ? 'Conta Corrente' 
+    : 'Conta Poupança'
+
+  return (
+    <div className="card">
+      <h3>Conta Ativa</h3>
+      <p><strong>Banco:</strong> {recebedor.instituicao_nome}</p>
+      <p><strong>Agência:</strong> {recebedor.agencia}</p>
+      <p><strong>Conta:</strong> {recebedor.conta}</p>
+      <p><strong>Tipo:</strong> {tipoConta}</p>
+      <button>Trocar Conta</button>
+    </div>
+  )
+}
+```
+
+---
+
+### 2. Listar Recebedores (Histórico)
+
+**Função:** `listar_recebedores(p_somente_ativos?)`  
+**Uso:** Exibir histórico de contas (ativas e inativas)  
+**Requer:** 🔐 Usuário autenticado
+
+#### Parâmetros
+
+| Parâmetro | Tipo | Obrigatório | Default | Descrição |
+|-----------|------|-------------|---------|-----------|
+| `p_somente_ativos` | `boolean` | Não | `false` | Se `true`, lista apenas recebedores ativos |
+
+#### Exemplo TypeScript
+
+```typescript
+async function listarRecebedores(somenteAtivos = false) {
+  const { data, error } = await supabase.rpc('listar_recebedores', {
+    p_somente_ativos: somenteAtivos
+  })
+  
+  if (error) {
+    console.error('Erro ao listar recebedores:', error)
+    return []
+  }
+
+  // Estrutura da resposta
+  console.log(data)
+  // {
+  //   status: "OK",
+  //   message: "Listados 3 recebedor(es)",
+  //   data: {
+  //     recebedores: [
+  //       {
+  //         id: "uuid-1",
+  //         instituicao_nome: "Banco do Brasil",
+  //         agencia: "0001",
+  //         conta: "12345",
+  //         tipo_conta: "CHECKING_ACCOUNT",
+  //         ind_ativo: true,
+  //         data_inativacao: null,
+  //         criado_em: "2024-01-01T00:00:00Z"
+  //       },
+  //       {
+  //         id: "uuid-2",
+  //         instituicao_nome: "Itaú",
+  //         agencia: "0002",
+  //         conta: "67890",
+  //         tipo_conta: "SAVINGS_ACCOUNT",
+  //         ind_ativo: false,
+  //         data_inativacao: "2024-01-15T00:00:00Z",
+  //         criado_em: "2023-12-01T00:00:00Z"
+  //       }
+  //     ],
+  //     total: 3
+  //   }
+  // }
+
+  return data.data.recebedores
+}
+```
+
+#### Exemplo React Component
+
+```tsx
+'use client'
+
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+import { Badge } from '@/components/ui/badge'
+
+interface Recebedor {
+  id: string
+  instituicao_nome: string
+  agencia: string
+  conta: string
+  tipo_conta: string
+  ind_ativo: boolean
+  data_inativacao: string | null
+  criado_em: string
+}
+
+export function HistoricoRecebedores() {
+  const [recebedores, setRecebedores] = useState<Recebedor[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function carregar() {
+      const { data, error } = await supabase.rpc('listar_recebedores', {
+        p_somente_ativos: false // Listar todos
+      })
+      
+      if (!error && data.status === 'OK') {
+        setRecebedores(data.data.recebedores || [])
+      }
+      
+      setLoading(false)
+    }
+    
+    carregar()
+  }, [])
+
+  if (loading) return <p>Carregando...</p>
+  
+  if (recebedores.length === 0) {
+    return <p>Nenhuma conta cadastrada.</p>
+  }
+
+  return (
+    <div className="space-y-4">
+      <h3>Histórico de Contas</h3>
+      {recebedores.map((rec) => (
+        <div key={rec.id} className="card">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="font-semibold">{rec.instituicao_nome}</p>
+              <p className="text-sm text-gray-600">
+                Ag: {rec.agencia} | Conta: {rec.conta}
+              </p>
+              <p className="text-xs text-gray-500">
+                Cadastrado em: {new Date(rec.criado_em).toLocaleDateString()}
+              </p>
+            </div>
+            <div>
+              {rec.ind_ativo ? (
+                <Badge variant="success">Ativa</Badge>
+              ) : (
+                <Badge variant="secondary">Inativa</Badge>
+              )}
+            </div>
+          </div>
+          {!rec.ind_ativo && (
+            <button className="mt-2 text-sm">Reativar Conta</button>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+```
+
+---
+
+### 3. Validação de Duplicidade (Frontend Local)
+
+**Não há API específica para isso!** Use `listar_recebedores()` e valide localmente no frontend.
+
+#### Por que validação local?
+
+1. **Backend já valida**: A Edge Function de criação valida duplicidade
+2. **Menos requisições**: Usa dados já carregados
+3. **UX melhor**: Feedback instantâneo sem esperar API
+
+#### Exemplo React Hook (Validação Local)
+
+```tsx
+'use client'
+
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
+
+interface Recebedor {
+  id: string
+  instituicao_id: string
+  agencia: string
+  conta: string
+  tipo_conta: string
+  ind_ativo: boolean
+}
+
+export function useValidarContaDuplicada() {
+  const [recebedores, setRecebedores] = useState<Recebedor[]>([])
+  const [carregando, setCarregando] = useState(true)
+
+  // Carregar recebedores ao montar
+  useEffect(() => {
+    async function carregar() {
+      const { data, error } = await supabase.rpc('listar_recebedores', {
+        p_somente_ativos: false // Buscar todos (ativos e inativos)
+      })
+      
+      if (!error && data.status === 'OK') {
+        setRecebedores(data.data.recebedores || [])
+      }
+      
+      setCarregando(false)
+    }
+    
+    carregar()
+  }, [])
+
+  // Função de validação local
+  const validar = (
+    instituicaoId: string,
+    agencia: string,
+    conta: string,
+    tipoConta: 'CHECKING_ACCOUNT' | 'SAVINGS_ACCOUNT'
+  ) => {
+    // Normalizar agência e conta (mesmo que backend faz)
+    const agenciaNorm = agencia.replace(/[^0-9]/g, '')
+    const contaNorm = conta.replace(/[^0-9]/g, '')
+
+    // Buscar recebedor com mesmos dados
+    const recebedorExistente = recebedores.find(
+      r => r.instituicao_id === instituicaoId &&
+           r.agencia === agenciaNorm &&
+           r.conta === contaNorm &&
+           r.tipo_conta === tipoConta
+    )
+
+    if (!recebedorExistente) {
+      return { valido: true }
+    }
+
+    if (recebedorExistente.ind_ativo) {
+      return {
+        valido: false,
+        erro: 'Esta conta já está ativa.',
+        recebedorId: recebedorExistente.id
+      }
+    }
+
+    return {
+      valido: false,
+      erro: 'Esta conta já foi cadastrada. Use "Reativar Conta".',
+      recebedorId: recebedorExistente.id,
+      podeReativar: true
+    }
+  }
+
+  return { validar, carregando, recebedores }
+}
+
+// Uso no formulário
+export function FormularioCadastrarConta() {
+  const { validar, carregando } = useValidarContaDuplicada()
+  const [erro, setErro] = useState('')
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    const formData = new FormData(e.target as HTMLFormElement)
+    const instituicaoId = formData.get('instituicao_id') as string
+    const agencia = formData.get('agencia') as string
+    const conta = formData.get('conta') as string
+    const tipoConta = formData.get('tipo_conta') as 'CHECKING_ACCOUNT' | 'SAVINGS_ACCOUNT'
+
+    // Validar duplicidade LOCALMENTE
+    const resultado = validar(instituicaoId, agencia, conta, tipoConta)
+    
+    if (!resultado.valido) {
+      setErro(resultado.erro)
+      return
+    }
+
+    // Se passou na validação, chamar Edge Function para cadastrar
+    // ...
+  }
+
+  if (carregando) return <p>Carregando...</p>
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {/* Campos do formulário */}
+      {erro && <div className="alert alert-error">{erro}</div>}
+      <button type="submit">Cadastrar Conta</button>
+    </form>
+  )
+}
+```
+
+**Vantagens da validação local:**
+- ✅ Feedback instantâneo (sem esperar API)
+- ✅ Menos requisições ao backend
+- ✅ Funciona offline (com dados em cache)
+- ✅ Backend ainda valida (segurança em camadas)
+
+---
+
+## 🚀 Edge Functions (Ações)
+
+As Edge Functions são usadas para **criar** e **ativar** recebedores, pois envolvem integração com Pluggy via N8N.
+
+---
+
+### 4. Cadastrar Novo Recebedor
+
+**Função:** `cadastrar_recebedor`  
+**Uso:** Criar nova conta bancária (banco + Pluggy)  
+**Requer:** 🔐 Usuário autenticado
+
+#### Endpoint
+
+```
+POST /functions/v1/cadastrar_recebedor
+```
+
+#### Request Body
+
+```typescript
+{
+  instituicao_id: string;  // UUID da instituição financeira (Pluggy)
+  agencia: string;         // Ex: "0001" ou "0001-9" (será normalizado)
+  conta: string;           // Ex: "12345" ou "12345-6" (será normalizado)
+  tipo_conta: "CHECKING_ACCOUNT" | "SAVINGS_ACCOUNT";
+}
+```
+
+#### Response - Sucesso
+
+```typescript
+{
+  status: "success",
+  message: "Recebedor cadastrado e ativado com sucesso",
+  data: {
+    recebedor_id: string;           // UUID do recebedor criado
+    id_recebedor_gateway: string;   // ID retornado pela Pluggy
+    ativo: true
+  }
+}
+```
+
+#### Response - Erro (mas recebedor criado)
+
+```typescript
+{
+  status: "error",
+  message: "Falha ao cadastrar recebedor na Pluggy. Tente novamente.",
+  code: "N8N_REQUEST_FAILED",
+  data: {
+    recebedor_id: string;  // 🔑 Use para tentar novamente!
+    pode_retry: true,
+    http_status: 500,
+    details: "..."
+  }
+}
+```
+
+**Importante:** Mesmo em erro, o `recebedor_id` é retornado. Use-o para **tentar novamente** com `ativar_recebedor`.
+
+#### Exemplo TypeScript
+
+```typescript
+import { supabase } from '@/lib/supabase'
+
+interface CadastrarRecebedorInput {
+  instituicao_id: string
+  agencia: string
+  conta: string
+  tipo_conta: 'CHECKING_ACCOUNT' | 'SAVINGS_ACCOUNT'
+}
+
+interface CadastrarRecebedorResponse {
+  sucesso: boolean
+  recebedorId?: string
+  idRecebedorGateway?: string
+  erro?: string
+  podeRetry?: boolean
+}
+
+async function cadastrarRecebedor(
+  input: CadastrarRecebedorInput
+): Promise<CadastrarRecebedorResponse> {
+  const { data, error } = await supabase.functions.invoke('cadastrar_recebedor', {
+    body: input
+  })
+
+  if (error) {
+    console.error('Erro ao chamar Edge Function:', error)
+    return { sucesso: false, erro: error.message }
+  }
+
+  if (data.status === 'error') {
+    console.error('Erro retornado pela Edge Function:', data)
+    
+    // Se tem recebedor_id, pode tentar novamente
+    if (data.data?.recebedor_id) {
+      return {
+        sucesso: false,
+        erro: data.message,
+        recebedorId: data.data.recebedor_id,
+        podeRetry: true
+      }
+    }
+    
+    return { sucesso: false, erro: data.message }
+  }
+
+  return {
+    sucesso: true,
+    recebedorId: data.data.recebedor_id,
+    idRecebedorGateway: data.data.id_recebedor_gateway
+  }
+}
+
+// Uso
+const resultado = await cadastrarRecebedor({
+  instituicao_id: 'uuid-instituicao',
+  agencia: '0001',
+  conta: '12345',
+  tipo_conta: 'CHECKING_ACCOUNT'
+})
+
+if (resultado.sucesso) {
+  console.log('Recebedor cadastrado:', resultado.recebedorId)
+} else if (resultado.podeRetry) {
+  console.log('Erro temporário. Pode tentar novamente.')
+  // Mostrar botão "Tentar Novamente" que chama ativar_recebedor
+} else {
+  console.log('Erro definitivo:', resultado.erro)
+}
+```
+
+#### Exemplo React Component
+
+```tsx
+'use client'
+
+import { useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+interface Props {
+  onSucesso: () => void
+  onErro: (mensagem: string, recebedorId?: string) => void
+}
+
+export function FormularioCadastrarRecebedor({ onSucesso, onErro }: Props) {
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setLoading(true)
+    setErro('')
+
+    const formData = new FormData(e.currentTarget)
+    
+    const { data, error } = await supabase.functions.invoke('cadastrar_recebedor', {
+      body: {
+        instituicao_id: formData.get('instituicao_id'),
+        agencia: formData.get('agencia'),
+        conta: formData.get('conta'),
+        tipo_conta: formData.get('tipo_conta')
+      }
+    })
+
+    setLoading(false)
+
+    if (error || data.status === 'error') {
+      const mensagem = data?.message || error.message
+      setErro(mensagem)
+      
+      // Se tem recebedor_id, passar para componente pai para mostrar "Retry"
+      if (data?.data?.recebedor_id) {
+        onErro(mensagem, data.data.recebedor_id)
+      } else {
+        onErro(mensagem)
+      }
+      return
+    }
+
+    onSucesso()
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label>Banco</label>
+        <select name="instituicao_id" required>
+          {/* 
+            💡 Para implementar a lista de bancos, veja:
+            - "Caso 3: Carregar Instituições Financeiras" (abaixo)
+            - Use o hook useInstituicoesFinanceiras() ou
+            - Use o componente SelecionarBancoComBusca
+          */}
+          <option value="">Selecione um banco</option>
+          {/* instituicoes.map(inst => ...) */}
+        </select>
+      </div>
+
+      <div>
+        <label>Agência</label>
+        <input 
+          type="text" 
+          name="agencia" 
+          placeholder="0001"
+          required 
+        />
+      </div>
+
+      <div>
+        <label>Conta</label>
+        <input 
+          type="text" 
+          name="conta" 
+          placeholder="12345"
+          required 
+        />
+      </div>
+
+      <div>
+        <label>Tipo de Conta</label>
+        <select name="tipo_conta" required>
+          <option value="CHECKING_ACCOUNT">Conta Corrente</option>
+          <option value="SAVINGS_ACCOUNT">Conta Poupança</option>
+        </select>
+      </div>
+
+      {erro && (
+        <div className="alert alert-error">
+          {erro}
+        </div>
+      )}
+
+      <button 
+        type="submit" 
+        disabled={loading}
+        className="btn btn-primary w-full"
+      >
+        {loading ? 'Cadastrando...' : 'Cadastrar Conta'}
+      </button>
+    </form>
+  )
+}
+```
+
+---
+
+### 5. Ativar/Reativar Recebedor Existente
+
+**Função:** `ativar_recebedor`  
+**Uso:** Ativar conta existente (retry após erro OU reativar conta inativa)  
+**Requer:** 🔐 Usuário autenticado
+
+#### Comportamentos
+
+1. **Retry (não tem `id_recebedor_gateway`)**: Tenta cadastrar na Pluggy novamente
+2. **Reativar (já tem `id_recebedor_gateway`)**: Apenas ativa no banco (não chama N8N)
+
+#### Endpoint
+
+```
+POST /functions/v1/ativar_recebedor
+```
+
+#### Request Body
+
+```typescript
+{
+  recebedor_id: string;  // UUID do recebedor a ser ativado
+}
+```
+
+#### Response - Sucesso (Reativação)
+
+```typescript
+{
+  status: "success",
+  message: "Recebedor reativado com sucesso",
+  data: {
+    recebedor_id: string;
+    id_recebedor_gateway: string;
+    ativo: true,
+    chamou_n8n: false  // 🔑 Indica que NÃO chamou Pluggy
+  }
+}
+```
+
+#### Response - Sucesso (Retry)
+
+```typescript
+{
+  status: "success",
+  message: "Recebedor cadastrado na Pluggy e ativado com sucesso",
+  data: {
+    recebedor_id: string;
+    id_recebedor_gateway: string;
+    ativo: true,
+    chamou_n8n: true  // 🔑 Indica que chamou Pluggy
+  }
+}
+```
+
+#### Exemplo TypeScript
+
+```typescript
+import { supabase } from '@/lib/supabase'
+
+interface AtivarRecebedorResponse {
+  sucesso: boolean
+  recebedorId?: string
+  chamouN8n?: boolean
+  erro?: string
+}
+
+async function ativarRecebedor(
+  recebedorId: string
+): Promise<AtivarRecebedorResponse> {
+  const { data, error } = await supabase.functions.invoke('ativar_recebedor', {
+    body: {
+      recebedor_id: recebedorId
+    }
+  })
+
+  if (error) {
+    console.error('Erro ao chamar Edge Function:', error)
+    return { sucesso: false, erro: error.message }
+  }
+
+  if (data.status === 'error') {
+    console.error('Erro retornado pela Edge Function:', data)
+    return { sucesso: false, erro: data.message }
+  }
+
+  return {
+    sucesso: true,
+    recebedorId: data.data.recebedor_id,
+    chamouN8n: data.data.chamou_n8n
+  }
+}
+
+// Uso 1: Tentar novamente após erro no cadastro
+async function tentarNovamente(recebedorId: string) {
+  const resultado = await ativarRecebedor(recebedorId)
+  
+  if (resultado.sucesso) {
+    if (resultado.chamouN8n) {
+      console.log('Cadastrado na Pluggy com sucesso!')
+    } else {
+      console.log('Reativado com sucesso (já estava na Pluggy)')
+    }
+  } else {
+    console.log('Erro:', resultado.erro)
+  }
+}
+
+// Uso 2: Reativar conta inativa
+async function reativarConta(recebedorId: string) {
+  const resultado = await ativarRecebedor(recebedorId)
+  
+  if (resultado.sucesso) {
+    console.log('Conta reativada com sucesso!')
+    // Atualizar UI para mostrar como ativa
+  }
+}
+```
+
+#### Exemplo React Component
+
+```tsx
+'use client'
+
+import { useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+interface Props {
+  recebedorId: string
+  temIdGateway: boolean  // Se true, é reativação. Se false, é retry
+  onSucesso: () => void
+}
+
+export function BotaoAtivarRecebedor({ recebedorId, temIdGateway, onSucesso }: Props) {
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const handleAtivar = async () => {
+    setLoading(true)
+    setErro('')
+
+    const { data, error } = await supabase.functions.invoke('ativar_recebedor', {
+      body: { recebedor_id: recebedorId }
+    })
+
+    setLoading(false)
+
+    if (error || data.status === 'error') {
+      setErro(data?.message || error.message)
+      return
+    }
+
+    onSucesso()
+  }
+
+  const textoBotao = temIdGateway 
+    ? (loading ? 'Reativando...' : 'Reativar Conta')
+    : (loading ? 'Tentando novamente...' : 'Tentar Novamente')
+
+  return (
+    <div>
+      <button 
+        onClick={handleAtivar} 
+        disabled={loading}
+        className="btn btn-primary"
+      >
+        {textoBotao}
+      </button>
+      {erro && <p className="text-red-500 text-sm mt-2">{erro}</p>}
+    </div>
+  )
+}
+```
+
+---
+
+## 🔐 Tratamento de Erros
+
+Todas as APIs seguem o padrão de resposta unificado:
+
+```typescript
+// Resposta de SUCESSO
+{
+  status: "OK",
+  message: "Mensagem descritiva",
+  data: { /* dados específicos */ }
+}
+
+// Resposta de ERRO
+{
+  status: "ERROR",
+  message: "Mensagem descritiva do erro",
+  code: "CODIGO_ERRO",
+  data: null
+}
+```
+
+### Exemplo de tratamento genérico
+
+```typescript
+async function chamarRPC<T>(
+  funcao: string, 
+  params?: Record<string, any>
+): Promise<{ sucesso: boolean; dados?: T; erro?: string }> {
+  try {
+    const { data, error } = await supabase.rpc(funcao, params)
+    
+    if (error) {
+      console.error(`Erro na RPC ${funcao}:`, error)
+      return { sucesso: false, erro: error.message }
+    }
+
+    if (data.status !== 'OK') {
+      console.error(`Erro no backend ${funcao}:`, data)
+      return { sucesso: false, erro: data.message }
+    }
+
+    return { sucesso: true, dados: data.data }
+  } catch (err) {
+    console.error(`Exceção ao chamar ${funcao}:`, err)
+    return { sucesso: false, erro: 'Erro inesperado' }
+  }
+}
+
+// Uso
+const { sucesso, dados, erro } = await chamarRPC<{ recebedor: Recebedor }>(
+  'obter_recebedor_ativo'
+)
+
+if (!sucesso) {
+  toast.error(erro)
+  return
+}
+
+console.log(dados.recebedor)
+```
+
+---
+
+## 🎯 Fluxos de UI Comuns
+
+### Fluxo 1: Página de Configuração de Recebimento
+
+Exibe conta ativa ou formulário de cadastro.
+
+```tsx
+'use client'
+
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+interface Recebedor {
+  id: string
+  instituicao: { nome: string; nome_fantasia: string }
+  agencia: string
+  conta: string
+  tipo_conta: string
+}
+
+export function PaginaConfiguracaoRecebimento() {
+  const [recebedorAtivo, setRecebedorAtivo] = useState<Recebedor | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    carregarRecebedorAtivo()
+  }, [])
+
+  async function carregarRecebedorAtivo() {
+    const { data } = await supabase.rpc('obter_recebedor_ativo')
+    
+    if (data?.status === 'OK' && data.data) {
+      setRecebedorAtivo(data.data)
+    }
+    
+    setLoading(false)
+  }
+
+  if (loading) return <p>Carregando...</p>
+
+  return (
+    <div className="max-w-2xl mx-auto p-6">
+      <h1 className="text-2xl font-bold mb-6">Configuração de Recebimento</h1>
+      
+      {recebedorAtivo ? (
+        <ContaAtiva 
+          recebedor={recebedorAtivo} 
+          onTrocar={() => setRecebedorAtivo(null)} 
+        />
+      ) : (
+        <FormularioCadastro 
+          onSucesso={carregarRecebedorAtivo} 
+        />
+      )}
+    </div>
+  )
+}
+```
+
+---
+
+### Fluxo 2: Cadastro Completo (com Seleção de Banco + Validação + Retry)
+
+Formulário completo integrando: seleção de bancos, validação local e retry.
+
+```tsx
+'use client'
+
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
+import { useValidarContaDuplicada } from '@/hooks/useValidarContaDuplicada'
+import { useInstituicoesFinanceiras } from '@/hooks/useInstituicoesFinanceiras'
+
+export function FormularioCadastro({ onSucesso }: { onSucesso: () => void }) {
+  // Hook de validação de duplicidade
+  const { validar, carregando: carregandoValidacao } = useValidarContaDuplicada()
+  
+  // Hook de instituições financeiras
+  const { instituicoes, loading: carregandoBancos } = useInstituicoesFinanceiras()
+  
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState('')
+  const [recebedorErroId, setRecebedorErroId] = useState<string | null>(null)
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setErro('')
+    setRecebedorErroId(null)
+    
+    const formData = new FormData(e.currentTarget)
+    const instituicaoId = formData.get('instituicao_id') as string
+    const agencia = formData.get('agencia') as string
+    const conta = formData.get('conta') as string
+    const tipoConta = formData.get('tipo_conta') as 'CHECKING_ACCOUNT' | 'SAVINGS_ACCOUNT'
+
+    // 1. Validar duplicidade LOCALMENTE
+    const validacao = validar(instituicaoId, agencia, conta, tipoConta)
+    
+    if (!validacao.valido) {
+      setErro(validacao.erro)
+      if (validacao.podeReativar) {
+        setRecebedorErroId(validacao.recebedorId!)
+      }
+      return
+    }
+
+    // 2. Chamar Edge Function para cadastrar
+    setLoading(true)
+
+    const { data, error } = await supabase.functions.invoke('cadastrar_recebedor', {
+      body: {
+        instituicao_id: instituicaoId,
+        agencia,
+        conta,
+        tipo_conta: tipoConta
+      }
+    })
+
+    setLoading(false)
+
+    if (error || data.status === 'error') {
+      const mensagem = data?.message || error.message
+      setErro(mensagem)
+      
+      // Se falhou mas criou o registro, permitir retry
+      if (data?.data?.recebedor_id) {
+        setRecebedorErroId(data.data.recebedor_id)
+      }
+      return
+    }
+
+    // Sucesso!
+    onSucesso()
+  }
+
+  const handleRetry = async () => {
+    if (!recebedorErroId) return
+    
+    setLoading(true)
+    setErro('')
+
+    const { data, error } = await supabase.functions.invoke('ativar_recebedor', {
+      body: { recebedor_id: recebedorErroId }
+    })
+
+    setLoading(false)
+
+    if (error || data.status === 'error') {
+      setErro(data?.message || error.message)
+      return
+    }
+
+    // Sucesso!
+    onSucesso()
+  }
+
+  if (carregandoValidacao || carregandoBancos) {
+    return <p>Carregando...</p>
+  }
+
+  return (
+    <div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Seleção de Banco */}
+        <div>
+          <label className="block text-sm font-medium mb-1">Banco</label>
+          <select 
+            name="instituicao_id" 
+            required
+            className="w-full border rounded px-3 py-2"
+          >
+            <option value="">Selecione um banco</option>
+            {instituicoes.map(inst => (
+              <option key={inst.id} value={inst.id}>
+                {inst.nome_fantasia}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Agência */}
+        <div>
+          <label className="block text-sm font-medium mb-1">Agência</label>
+          <input 
+            type="text" 
+            name="agencia" 
+            placeholder="0001"
+            required
+            className="w-full border rounded px-3 py-2"
+          />
+        </div>
+
+        {/* Conta */}
+        <div>
+          <label className="block text-sm font-medium mb-1">Conta</label>
+          <input 
+            type="text" 
+            name="conta" 
+            placeholder="12345"
+            required
+            className="w-full border rounded px-3 py-2"
+          />
+        </div>
+
+        {/* Tipo de Conta */}
+        <div>
+          <label className="block text-sm font-medium mb-1">Tipo de Conta</label>
+          <select 
+            name="tipo_conta" 
+            required
+            className="w-full border rounded px-3 py-2"
+          >
+            <option value="CHECKING_ACCOUNT">Conta Corrente</option>
+            <option value="SAVINGS_ACCOUNT">Conta Poupança</option>
+          </select>
+        </div>
+
+        {/* Erro com opção de retry */}
+        {erro && (
+          <div className="alert alert-error bg-red-50 border border-red-200 rounded p-4">
+            <p className="text-red-800">{erro}</p>
+            {recebedorErroId && (
+              <button 
+                type="button"
+                onClick={handleRetry}
+                disabled={loading}
+                className="btn btn-sm btn-outline mt-2 px-4 py-2 border rounded hover:bg-red-100"
+              >
+                {loading ? 'Tentando...' : 'Tentar Novamente'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Botão de submit */}
+        <button 
+          type="submit" 
+          disabled={loading}
+          className="btn btn-primary w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+        >
+          {loading ? 'Cadastrando...' : 'Cadastrar Conta'}
+        </button>
+      </form>
+    </div>
+  )
+}
+```
+
+**Hook useInstituicoesFinanceiras:**
+
+```tsx
+// hooks/useInstituicoesFinanceiras.ts
+'use client'
+
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+interface Instituicao {
+  id: string
+  nome: string
+  nome_fantasia: string
+  ispb: string
+  pais: string
+}
+
+export function useInstituicoesFinanceiras() {
+  const [instituicoes, setInstituicoes] = useState<Instituicao[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    carregarInstituicoes()
+  }, [])
+
+  async function carregarInstituicoes() {
+    const { data, error } = await supabase.rpc('listar_instituicoes_financeiras', {
+      p_limit: 500 // Carregar todas
+    })
+    
+    if (!error && data.status === 'OK') {
+      setInstituicoes(data.data.instituicoes)
+    }
+    
+    setLoading(false)
+  }
+
+  return { instituicoes, loading }
+}
+```
+
+---
+
+### Fluxo 3: Histórico com Opção de Reativar
+
+Lista todas as contas (ativas e inativas) com ação de reativar.
+
+```tsx
+'use client'
+
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+import { Badge } from '@/components/ui/badge'
+
+interface Recebedor {
+  id: string
+  instituicao_nome: string
+  agencia: string
+  conta: string
+  tipo_conta: string
+  ind_ativo: boolean
+  id_recebedor_gateway: string | null
+  criado_em: string
+  data_inativacao: string | null
+}
+
+export function HistoricoRecebedores() {
+  const [recebedores, setRecebedores] = useState<Recebedor[]>([])
+  const [loading, setLoading] = useState(true)
+  const [ativandoId, setAtivandoId] = useState<string | null>(null)
+
+  useEffect(() => {
+    carregarHistorico()
+  }, [])
+
+  async function carregarHistorico() {
+    const { data, error } = await supabase.rpc('listar_recebedores', {
+      p_somente_ativos: false
+    })
+    
+    if (!error && data.status === 'OK') {
+      setRecebedores(data.data.recebedores || [])
+    }
+    
+    setLoading(false)
+  }
+
+  async function reativarConta(recebedorId: string) {
+    setAtivandoId(recebedorId)
+
+    const { data, error } = await supabase.functions.invoke('ativar_recebedor', {
+      body: { recebedor_id: recebedorId }
+    })
+
+    setAtivandoId(null)
+
+    if (error || data.status === 'error') {
+      alert(data?.message || error.message)
+      return
+    }
+
+    // Recarregar lista
+    carregarHistorico()
+  }
+
+  if (loading) return <p>Carregando...</p>
+  
+  if (recebedores.length === 0) {
+    return <p>Nenhuma conta cadastrada.</p>
+  }
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold">Histórico de Contas</h3>
+      {recebedores.map((rec) => {
+        const tipoConta = rec.tipo_conta === 'CHECKING_ACCOUNT' 
+          ? 'Conta Corrente' 
+          : 'Conta Poupança'
+
+        return (
+          <div key={rec.id} className="card border rounded-lg p-4">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="font-semibold">{rec.instituicao_nome}</p>
+                <p className="text-sm text-gray-600">
+                  {tipoConta} | Ag: {rec.agencia} | Conta: {rec.conta}
+                </p>
+                <p className="text-xs text-gray-500">
+                  Cadastrado em: {new Date(rec.criado_em).toLocaleDateString()}
+                </p>
+                {rec.data_inativacao && (
+                  <p className="text-xs text-gray-500">
+                    Inativado em: {new Date(rec.data_inativacao).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+              <div>
+                {rec.ind_ativo ? (
+                  <Badge variant="success">Ativa</Badge>
+                ) : (
+                  <Badge variant="secondary">Inativa</Badge>
+                )}
+              </div>
+            </div>
+            
+            {!rec.ind_ativo && (
+              <button 
+                onClick={() => reativarConta(rec.id)}
+                disabled={ativandoId === rec.id}
+                className="mt-3 btn btn-sm btn-outline"
+              >
+                {ativandoId === rec.id 
+                  ? 'Reativando...' 
+                  : rec.id_recebedor_gateway 
+                    ? 'Reativar Conta' 
+                    : 'Tentar Novamente'
+                }
+              </button>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+```
+
+---
+
+### Fluxo 4: Trocar Conta Ativa
+
+Inativa a conta atual e ativa outra (ou cadastra nova).
+
+```tsx
+'use client'
+
+import { useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+interface Props {
+  recebedorAtualId: string
+  onSucesso: () => void
+}
+
+export function TrocarConta({ recebedorAtualId, onSucesso }: Props) {
+  const [passo, setPasso] = useState<'escolher' | 'cadastrar'>('escolher')
+
+  return (
+    <div>
+      {passo === 'escolher' ? (
+        <div>
+          <h3>Deseja reativar uma conta anterior ou cadastrar nova?</h3>
+          <div className="flex gap-4 mt-4">
+            <button 
+              onClick={() => setPasso('cadastrar')}
+              className="btn btn-primary"
+            >
+              Cadastrar Nova Conta
+            </button>
+            <button 
+              onClick={() => {/* Mostrar histórico */}}
+              className="btn btn-outline"
+            >
+              Reativar Conta Anterior
+            </button>
+          </div>
+        </div>
+      ) : (
+        <FormularioCadastro onSucesso={onSucesso} />
+      )}
+    </div>
+  )
+}
+```
+
+---
+
+## 🛡️ Tratamento de Casos Especiais
+
+### Caso 1: Retry após Falha Temporária
+
+```tsx
+'use client'
+
+import { useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+interface Estado {
+  tipo: 'inicial' | 'cadastrando' | 'erro_retry' | 'sucesso'
+  recebedorId?: string
+  mensagemErro?: string
+}
+
+export function CadastroComRetry() {
+  const [estado, setEstado] = useState<Estado>({ tipo: 'inicial' })
+
+  async function cadastrar(formData: FormData) {
+    setEstado({ tipo: 'cadastrando' })
+
+    const { data, error } = await supabase.functions.invoke('cadastrar_recebedor', {
+      body: {
+        instituicao_id: formData.get('instituicao_id'),
+        agencia: formData.get('agencia'),
+        conta: formData.get('conta'),
+        tipo_conta: formData.get('tipo_conta')
+      }
+    })
+
+    if (error || data.status === 'error') {
+      // Se tem recebedor_id, oferece retry
+      if (data?.data?.recebedor_id) {
+        setEstado({
+          tipo: 'erro_retry',
+          recebedorId: data.data.recebedor_id,
+          mensagemErro: data.message
+        })
+      } else {
+        setEstado({
+          tipo: 'inicial',
+          mensagemErro: data?.message || error.message
+        })
+      }
+      return
+    }
+
+    setEstado({ tipo: 'sucesso' })
+  }
+
+  async function tentarNovamente() {
+    if (!estado.recebedorId) return
+
+    setEstado({ tipo: 'cadastrando', recebedorId: estado.recebedorId })
+
+    const { data, error } = await supabase.functions.invoke('ativar_recebedor', {
+      body: { recebedor_id: estado.recebedorId }
+    })
+
+    if (error || data.status === 'error') {
+      setEstado({
+        tipo: 'erro_retry',
+        recebedorId: estado.recebedorId,
+        mensagemErro: data?.message || error.message
+      })
+      return
+    }
+
+    setEstado({ tipo: 'sucesso' })
+  }
+
+  if (estado.tipo === 'sucesso') {
+    return <div className="alert alert-success">Conta cadastrada com sucesso!</div>
+  }
+
+  if (estado.tipo === 'erro_retry') {
+    return (
+      <div className="alert alert-warning">
+        <p>{estado.mensagemErro}</p>
+        <button 
+          onClick={tentarNovamente}
+          className="btn btn-sm btn-primary mt-2"
+        >
+          Tentar Novamente
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); cadastrar(new FormData(e.currentTarget)) }}>
+      {/* Campos do formulário */}
+      {estado.mensagemErro && (
+        <div className="alert alert-error">{estado.mensagemErro}</div>
+      )}
+      <button 
+        type="submit" 
+        disabled={estado.tipo === 'cadastrando'}
+        className="btn btn-primary"
+      >
+        {estado.tipo === 'cadastrando' ? 'Cadastrando...' : 'Cadastrar'}
+      </button>
+    </form>
+  )
+}
+```
+
+---
+
+### Caso 2: Verificar se Assinante tem CPF/CNPJ
+
+```tsx
+// Verificar antes de exibir formulário de cadastro
+
+async function verificarPreRequisitos() {
+  const { data, error } = await supabase.rpc('obter_dados_assinante')
+  
+  if (!data?.data?.cpf_cnpj) {
+    return {
+      podeConfigurar: false,
+      mensagem: 'Você precisa cadastrar CPF/CNPJ antes de configurar recebimento.'
+    }
+  }
+
+  return { podeConfigurar: true }
+}
+
+export function PaginaRecebimento() {
+  const [preRequisitos, setPreRequisitos] = useState({ podeConfigurar: false, mensagem: '' })
+
+  useEffect(() => {
+    verificarPreRequisitos().then(setPreRequisitos)
+  }, [])
+
+  if (!preRequisitos.podeConfigurar) {
+    return (
+      <div className="alert alert-warning">
+        <p>{preRequisitos.mensagem}</p>
+        <button onClick={() => router.push('/configuracoes/empresa')}>
+          Cadastrar CPF/CNPJ
+        </button>
+      </div>
+    )
+  }
+
+  return <FormularioCadastro />
+}
+```
+
+---
+
+### Caso 3: Carregar Instituições Financeiras (Pluggy)
+
+**API RPC:** `listar_instituicoes_financeiras(p_busca?, p_limit?, p_offset?)`  
+**Uso:** Listar bancos para seleção no formulário de cadastro  
+**Requer:** 🔐 Usuário autenticado
+
+> **💡 Recomendação UX:**  
+> Use **Combobox/Autocomplete** (Exemplo 3) ao invés de select simples.  
+> Brasil tem 150+ bancos - busca é essencial para boa experiência do usuário.
+
+#### Parâmetros
+
+| Parâmetro | Tipo | Obrigatório | Default | Descrição |
+|-----------|------|-------------|---------|-----------|
+| `p_busca` | `string` | Não | `null` | Busca no nome fantasia (ex: "Banco do Brasil") |
+| `p_limit` | `number` | Não | `50` | Limite de registros (máx: 500) |
+| `p_offset` | `number` | Não | `0` | Offset para paginação |
+
+#### Estrutura da Resposta
+
+```typescript
+{
+  status: "OK",
+  message: "Instituições financeiras listadas com sucesso",
+  data: {
+    instituicoes: [
+      {
+        id: "uuid",
+        nome: "Banco do Brasil S.A.",
+        nome_fantasia: "Banco do Brasil",
+        ispb: "00000000",
+        pais: "BR"
+      }
+    ],
+    total: 150,           // Total de registros disponíveis
+    limit: 50,            // Limite usado
+    offset: 0,            // Offset usado
+    has_more: true        // Se há mais registros
+  }
+}
+```
+
+#### 🎯 Qual Exemplo Usar?
+
+| Exemplo | UX | Quando Usar |
+|---------|----|-----------| 
+| **Exemplo 1: Select Simples** | ⭐⭐ | ❌ **Não recomendado** (lista muito grande) |
+| **Exemplo 2: Select com Busca** | ⭐⭐⭐⭐ | ✅ Boa opção se não puder usar Combobox |
+| **Exemplo 3: Combobox/Autocomplete** | ⭐⭐⭐⭐⭐ | ✅ **MELHOR** - Recomendado! |
+
+**👉 Use o Exemplo 3 (Combobox) para melhor experiência do usuário.**
+
+---
+
+#### Exemplo 1: Hook Básico (Carregar Todos)
+
+> ⚠️ **Não recomendado para produção** - Use apenas para testes. Lista longa prejudica UX.
+
+```tsx
+'use client'
+
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+interface Instituicao {
+  id: string
+  nome: string
+  nome_fantasia: string
+  ispb: string
+  pais: string
+}
+
+export function useInstituicoesFinanceiras() {
+  const [instituicoes, setInstituicoes] = useState<Instituicao[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    carregarInstituicoes()
+  }, [])
+
+  async function carregarInstituicoes() {
+    const { data, error } = await supabase.rpc('listar_instituicoes_financeiras')
+    
+    if (!error && data.status === 'OK') {
+      setInstituicoes(data.data.instituicoes)
+    }
+    
+    setLoading(false)
+  }
+
+  return { instituicoes, loading }
+}
+
+// Uso no formulário (select simples)
+export function SelecionarBanco() {
+  const { instituicoes, loading } = useInstituicoesFinanceiras()
+
+  if (loading) return <p>Carregando bancos...</p>
+
+  return (
+    <select name="instituicao_id" required>
+      <option value="">Selecione um banco</option>
+      {instituicoes.map(inst => (
+        <option key={inst.id} value={inst.id}>
+          {inst.nome_fantasia}
+        </option>
+      ))}
+    </select>
+  )
+}
+```
+
+#### Exemplo 2: Hook Avançado (Com Busca)
+
+> ✅ **Boa alternativa** - Input de busca + select filtrado. Simples de implementar.
+
+```tsx
+'use client'
+
+import { useState, useCallback } from 'react'
+import { supabase } from '@/lib/supabase'
+import { debounce } from 'lodash' // ou implementar próprio debounce
+
+interface Instituicao {
+  id: string
+  nome: string
+  nome_fantasia: string
+  ispb: string
+  pais: string
+}
+
+export function useInstituicoesComBusca() {
+  const [instituicoes, setInstituicoes] = useState<Instituicao[]>([])
+  const [loading, setLoading] = useState(false)
+  const [total, setTotal] = useState(0)
+
+  // Função de busca com debounce
+  const buscar = useCallback(
+    debounce(async (termoBusca: string) => {
+      setLoading(true)
+
+      const { data, error } = await supabase.rpc('listar_instituicoes_financeiras', {
+        p_busca: termoBusca || null,
+        p_limit: 50,
+        p_offset: 0
+      })
+
+      if (!error && data.status === 'OK') {
+        setInstituicoes(data.data.instituicoes || [])
+        setTotal(data.data.total)
+      }
+
+      setLoading(false)
+    }, 300), // 300ms de debounce
+    []
+  )
+
+  return { instituicoes, loading, total, buscar }
+}
+
+// Uso no formulário (select com busca)
+export function SelecionarBancoComBusca() {
+  const { instituicoes, loading, buscar } = useInstituicoesComBusca()
+  const [termoBusca, setTermoBusca] = useState('')
+
+  // Carregar todos ao montar
+  useEffect(() => {
+    buscar('')
+  }, [])
+
+  const handleBusca = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const termo = e.target.value
+    setTermoBusca(termo)
+    buscar(termo)
+  }
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm font-medium">Banco</label>
+      
+      {/* Campo de busca */}
+      <input
+        type="text"
+        placeholder="Buscar banco..."
+        value={termoBusca}
+        onChange={handleBusca}
+        className="w-full border rounded px-3 py-2"
+      />
+
+      {/* Select de bancos */}
+      <select 
+        name="instituicao_id" 
+        required
+        disabled={loading}
+        className="w-full border rounded px-3 py-2"
+      >
+        <option value="">
+          {loading ? 'Buscando...' : 'Selecione um banco'}
+        </option>
+        {instituicoes.map(inst => (
+          <option key={inst.id} value={inst.id}>
+            {inst.nome_fantasia}
+          </option>
+        ))}
+      </select>
+
+      {instituicoes.length === 0 && !loading && termoBusca && (
+        <p className="text-sm text-gray-500">Nenhum banco encontrado</p>
+      )}
+    </div>
+  )
+}
+```
+
+#### Exemplo 3: Componente Combobox (Autocomplete)
+
+> ⭐ **RECOMENDADO** - Melhor UX: busca em tempo real + navegação por teclado + mobile-friendly.
+
+```tsx
+'use client'
+
+import { useState, useEffect, useRef } from 'react'
+import { supabase } from '@/lib/supabase'
+
+interface Instituicao {
+  id: string
+  nome_fantasia: string
+}
+
+interface Props {
+  value?: string
+  onChange: (instituicaoId: string) => void
+}
+
+export function ComboboxBanco({ value, onChange }: Props) {
+  const [instituicoes, setInstituicoes] = useState<Instituicao[]>([])
+  const [loading, setLoading] = useState(false)
+  const [aberto, setAberto] = useState(false)
+  const [busca, setBusca] = useState('')
+  const timeoutRef = useRef<NodeJS.Timeout>()
+
+  // Buscar instituições com debounce
+  useEffect(() => {
+    if (!aberto) return
+
+    // Limpar timeout anterior
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+    }
+
+    // Buscar após 300ms
+    timeoutRef.current = setTimeout(async () => {
+      setLoading(true)
+
+      const { data, error } = await supabase.rpc('listar_instituicoes_financeiras', {
+        p_busca: busca || null,
+        p_limit: 20
+      })
+
+      if (!error && data.status === 'OK') {
+        setInstituicoes(data.data.instituicoes || [])
+      }
+
+      setLoading(false)
+    }, 300)
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [busca, aberto])
+
+  const handleSelecionar = (inst: Instituicao) => {
+    onChange(inst.id)
+    setBusca(inst.nome_fantasia)
+    setAberto(false)
+  }
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        placeholder="Digite o nome do banco..."
+        value={busca}
+        onChange={(e) => setBusca(e.target.value)}
+        onFocus={() => setAberto(true)}
+        onBlur={() => setTimeout(() => setAberto(false), 200)}
+        className="w-full border rounded px-3 py-2"
+      />
+
+      {aberto && (
+        <div className="absolute z-10 w-full mt-1 bg-white border rounded shadow-lg max-h-60 overflow-auto">
+          {loading ? (
+            <div className="px-3 py-2 text-gray-500">Buscando...</div>
+          ) : instituicoes.length === 0 ? (
+            <div className="px-3 py-2 text-gray-500">Nenhum banco encontrado</div>
+          ) : (
+            instituicoes.map(inst => (
+              <button
+                key={inst.id}
+                type="button"
+                onClick={() => handleSelecionar(inst)}
+                className="w-full text-left px-3 py-2 hover:bg-gray-100"
+              >
+                {inst.nome_fantasia}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Uso no formulário
+export function FormularioComCombobox() {
+  const [instituicaoId, setInstituicaoId] = useState('')
+
+  return (
+    <form>
+      <div>
+        <label>Banco</label>
+        <ComboboxBanco 
+          value={instituicaoId}
+          onChange={setInstituicaoId}
+        />
+        {/* Input hidden para enviar no form */}
+        <input type="hidden" name="instituicao_id" value={instituicaoId} required />
+      </div>
+      
+      {/* Outros campos... */}
+      
+      <button type="submit">Cadastrar</button>
+    </form>
+  )
+}
+```
+
+#### Outras APIs Disponíveis
+
+**Obter Instituição Específica:**
+
+```typescript
+// API: obter_instituicao_financeira(p_id)
+const { data } = await supabase.rpc('obter_instituicao_financeira', {
+  p_id: 'uuid-instituicao'
+})
+
+if (data.status === 'OK') {
+  console.log(data.data)
+  // {
+  //   id: "uuid",
+  //   nome: "Banco do Brasil S.A.",
+  //   nome_fantasia: "Banco do Brasil",
+  //   ispb: "00000000",
+  //   pais: "BR",
+  //   ind_ativo: true
+  // }
+}
+```
+
+**Contar Instituições:**
+
+```typescript
+// API: contar_instituicoes_financeiras(p_somente_ativas?)
+const { data } = await supabase.rpc('contar_instituicoes_financeiras', {
+  p_somente_ativas: true
+})
+
+if (data.status === 'OK') {
+  console.log(data.data.total) // Ex: 150
+}
+```
+
+---
+
+### Caso 4: Polling de Status (para operações longas)
+
+```tsx
+// Para casos onde N8N demora muito, pode implementar polling
+// (Avançado - só se necessário)
+
+async function cadastrarComPolling(dados: any) {
+  // 1. Iniciar cadastro
+  const { data } = await supabase.functions.invoke('cadastrar_recebedor', { body: dados })
+  
+  if (data.status === 'success') {
+    return { sucesso: true }
+  }
+
+  // 2. Se falhou mas tem recebedor_id, fazer polling
+  if (data.data?.recebedor_id) {
+    const recebedorId = data.data.recebedor_id
+    
+    // Tentar novamente a cada 5 segundos (máximo 3 tentativas)
+    for (let i = 0; i < 3; i++) {
+      await new Promise(resolve => setTimeout(resolve, 5000))
+      
+      const retry = await supabase.functions.invoke('ativar_recebedor', {
+        body: { recebedor_id: recebedorId }
+      })
+      
+      if (retry.data?.status === 'success') {
+        return { sucesso: true }
+      }
+    }
+  }
+
+  return { sucesso: false, erro: data.message }
+}
+```
+
+---
+
+## 📝 Notas Importantes
+
+1. **Autenticação Obrigatória** 🔐
+   - **Todas** as APIs (RPC e Edge Functions) exigem usuário autenticado
+   - O Supabase client passa automaticamente o token no header `Authorization`
+   - Exemplo: `const supabase = createClient(...)` com sessão ativa
+   - Sem autenticação: APIs retornarão erro 401 (Unauthorized)
+
+2. **Criação/Ativação via Edge Function**
+   - As APIs RPC são apenas para **consulta** (rápidas, síncronas)
+   - Criar/trocar/reativar recebedor usa **Edge Function** (integra com Pluggy via N8N)
+
+3. **CPF/CNPJ e Nome**
+   - São obtidos automaticamente da tabela `assinante`
+   - Frontend **NÃO** deve enviar esses dados nas Edge Functions
+
+4. **Normalização de Agência/Conta**
+   - Backend remove automaticamente caracteres não numéricos
+   - Frontend pode enviar "0001-9" que será salvo como "00019"
+   - Mesma normalização em validação local e backend
+
+5. **Isolamento Multi-tenant**
+   - Todas as APIs filtram automaticamente por `assinante_id`
+   - Não é necessário passar `assinante_id` como parâmetro
+   - Cada assinante só vê seus próprios recebedores
+
+6. **Formato de Resposta**
+   - **RPC**: Sempre verificar `data.status === 'OK'` antes de usar `data.data`
+   - **Edge Functions**: Verificar `data.status === 'success'`
+   - Dados sempre em `data.data.*`, nunca no primeiro nível
+
+7. **Retry Automático**
+   - Se `cadastrar_recebedor` falhar ao integrar com Pluggy, retorna `recebedor_id`
+   - Use `ativar_recebedor` com esse ID para tentar novamente
+   - Não é necessário recriar o recebedor
+
+8. **Reativação Inteligente**
+   - `ativar_recebedor` detecta se recebedor já tem `id_recebedor_gateway`
+   - Se tem: Apenas ativa (não chama Pluggy)
+   - Se não tem: Tenta cadastrar na Pluggy novamente (retry)
+
+9. **Troca de Conta Ativa**
+   - Ao ativar um recebedor, o sistema **automaticamente** inativa o anterior
+   - Não é necessário chamar função separada para inativar
+
+---
+
+## 🚀 Checklist de Implementação
+
+### Backend (✅ Completo)
+- ✅ Tabela `gateway_assinante_recebedor` criada
+- ✅ Funções `app_internal` implementadas
+- ✅ APIs RPC públicas criadas
+- ✅ Edge Function `cadastrar_recebedor` implementada
+- ✅ Edge Function `ativar_recebedor` implementada
+
+### Frontend (⏳ A fazer)
+- [ ] Página de configuração de recebimento
+- [ ] Formulário de cadastro com validação local
+- [ ] Componente de histórico de contas
+- [ ] Botão de reativar conta
+- [ ] Tratamento de retry em caso de erro
+- [ ] Feedback visual de loading/sucesso/erro
+
+### Infraestrutura (⏳ A fazer)
+- [ ] Configurar variáveis no Supabase:
+  - [ ] `SUPABASE_URL`
+  - [ ] `SUPABASE_ANON_KEY`
+  - [ ] `SUPABASE_SERVICE_ROLE_KEY`
+  - [ ] `N8N_CADASTRAR_RECEBEDOR_URL`
+  - [ ] `N8N_API_KEY`
+- [ ] Criar workflow N8N `cadastrarRecebedor`
+- [ ] Deploy das Edge Functions no Supabase
+- [ ] Testar fluxo completo em ambiente de desenvolvimento
+
+---
+
+## 📚 Recursos Adicionais
+
+- [Planejamento Gestão Recebedores](../../../docs/backend/Fase%202/PLANEJAMENTO_GESTAO_RECEBEDORES.md)
+- [Integração N8N + Pluggy](../../../docs/backend/Fase%201/INTEGRACAO_N8N_PLUGGY.md)
+- [Pluggy Payment Recipient API](https://docs.pluggy.ai/reference/payment-recipient-create)
+- [Supabase Edge Functions](https://supabase.com/docs/guides/functions)
+

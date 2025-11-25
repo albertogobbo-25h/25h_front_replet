@@ -21,7 +21,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { Loader2, Building2, AlertTriangle, RefreshCw, CheckCircle2 } from 'lucide-react';
-import { useInstituicoesFinanceiras, useValidarContaDuplicada, useRecebedor } from '@/hooks/useRecebedor';
+import { useValidarContaDuplicada, useRecebedor } from '@/hooks/useRecebedor';
+import ComboboxBanco from '@/components/ComboboxBanco';
 import type { TipoConta, CadastrarRecebedorResponse, AtivarRecebedorResponse } from '@/types/recebedor';
 
 interface ModalConfigContaBancariaProps {
@@ -43,7 +44,6 @@ export default function ModalConfigContaBancaria({
 }: ModalConfigContaBancariaProps) {
   const { toast } = useToast();
   const { invalidarRecebedor } = useRecebedor();
-  const { data: instituicoes = [], isLoading: loadingInstituicoes } = useInstituicoesFinanceiras();
   const { validar, carregando: carregandoValidacao } = useValidarContaDuplicada();
 
   const [estado, setEstado] = useState<Estado>('formulario');
@@ -52,6 +52,7 @@ export default function ModalConfigContaBancaria({
 
   const [formData, setFormData] = useState({
     instituicao_id: '',
+    instituicao_nome: '',
     agencia: '',
     conta: '',
     tipo_conta: '' as TipoConta | '',
@@ -64,6 +65,7 @@ export default function ModalConfigContaBancaria({
       setRecebedorErroId(null);
       setFormData({
         instituicao_id: '',
+        instituicao_nome: '',
         agencia: '',
         conta: '',
         tipo_conta: '',
@@ -200,7 +202,7 @@ export default function ModalConfigContaBancaria({
     }
   };
 
-  const isLoading = loadingInstituicoes || carregandoValidacao;
+  const isLoading = carregandoValidacao;
   const isCadastrando = estado === 'cadastrando';
 
   return (
@@ -266,24 +268,13 @@ export default function ModalConfigContaBancaria({
                   <Label htmlFor="instituicao">
                     Banco <span className="text-destructive">*</span>
                   </Label>
-                  <Select
+                  <ComboboxBanco
                     value={formData.instituicao_id}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, instituicao_id: value })
-                    }
+                    displayName={formData.instituicao_nome}
+                    onChange={(id, nome) => setFormData({ ...formData, instituicao_id: id, instituicao_nome: nome })}
                     disabled={isCadastrando}
-                  >
-                    <SelectTrigger id="instituicao" data-testid="select-banco">
-                      <SelectValue placeholder="Selecione o banco" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {instituicoes.map((inst) => (
-                        <SelectItem key={inst.id} value={inst.id}>
-                          {inst.nome_fantasia || inst.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Digite o nome do banco..."
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

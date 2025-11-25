@@ -64,9 +64,10 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 - **Bank Account Management (Recebedor)**: Complete flow for configuring bank account before creating clients or charges:
   - **Types**: `Recebedor`, `InstituicaoFinanceira`, `TipoConta` in `types/recebedor.ts`
   - **Hooks**: `useRecebedor` (query active receiver), `useListarRecebedores`, `useInstituicoesFinanceiras`, `useValidarContaDuplicada`, `useValidarRecebedor` (action interceptor)
-  - **Modal**: `ModalConfigContaBancaria` with bank selection, account details, and retry on failure
+  - **Modal**: `ModalConfigContaBancaria` with bank selection via ComboboxBanco, account details, and retry on failure
+  - **Components**: `ComboboxBanco` - Autocomplete component for bank selection with real-time search (debounce 300ms), keyboard navigation, uses `listar_instituicoes_financeiras(p_busca, p_limit)` RPC
   - **Validation Flow**: Blocks client/charge creation until bank account is configured with `id_recebedor_gateway`
-  - **RPCs**: `obter_recebedor_ativo()`, `listar_recebedores()`, `listar_instituicoes_financeiras()`
+  - **RPCs**: `obter_recebedor_ativo()`, `listar_recebedores()`, `listar_instituicoes_financeiras(p_busca?, p_limit?, p_offset?)`
   - **Edge Functions**: `cadastrar_recebedor`, `ativar_recebedor` for Pluggy integration
   - **Integration Points**: Profile page (view/edit), Clientes page (validation alert + interception), Cobrancas page (validation alert + interception)
 
