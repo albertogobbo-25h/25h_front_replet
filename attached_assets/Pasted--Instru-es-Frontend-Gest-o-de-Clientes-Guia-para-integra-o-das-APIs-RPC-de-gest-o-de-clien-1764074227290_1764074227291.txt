@@ -1,0 +1,967 @@
+# Instruções Frontend - Gestão de Clientes
+
+> Guia para integração das APIs RPC de gestão de clientes finais no frontend
+
+---
+
+## 📋 Visão Geral
+
+O módulo de clientes permite que o assinante cadastre e gerencie seus clientes finais (alunos, pacientes, etc.) para posterior criação de assinaturas e cobranças.
+
+**Importante:** 
+- **TODAS as APIs exigem usuário autenticado** 🔐
+- O Supabase client passa automaticamente o token quando há sessão ativa
+- Isolamento multi-tenant: Cada assinante só vê seus próprios clientes
+
+---
+
+## 🗂️ Resumo dos Endpoints
+
+| Função | Método | Uso | Autenticação |
+|--------|--------|-----|--------------|
+| `criar_cliente(...)` | RPC | Criar novo cliente | 🔐 Obrigatória |
+| `atualizar_cliente(...)` | RPC | Atualizar dados do cliente | 🔐 Obrigatória |
+| `obter_cliente(cliente_id)` | RPC | Buscar cliente por ID | 🔐 Obrigatória |
+| `buscar_cliente_por_cpf_cnpj(cpf_cnpj)` | RPC | Buscar por CPF/CNPJ | 🔐 Obrigatória |
+| `listar_clientes(filtros?)` | RPC | Listar com paginação | 🔐 Obrigatória |
+| `ativar_cliente(cliente_id)` | RPC | Ativar cliente | 🔐 Obrigatória |
+| `desativar_cliente(cliente_id)` | RPC | Desativar cliente | 🔐 Obrigatória |
+| `excluir_cliente(cliente_id)` | RPC | Excluir permanentemente | 🔐 Obrigatória |
+
+**Fluxo típico:**
+1. Listar clientes com filtros/paginação
+2. Criar novo cliente com dados obrigatórios
+3. Atualizar dados quando necessário
+4. Desativar (soft delete) em vez de excluir
+
+---
+
+## 🔐 Pré-requisito: Autenticação
+
+**TODAS as APIs exigem usuário autenticado.** O Supabase client passa automaticamente o token quando há sessão ativa.
+
+### Verificar Autenticação
+
+```typescript
+import { supabase } from '@/lib/supabase'
+
+// Verificar se usuário está autenticado
+const { data: { user } } = await supabase.auth.getUser()
+
+if (!user) {
+  router.push('/login')
+  return
+}
+```
+
+---
+
+## 📦 APIs Disponíveis
+
+### 1. Criar Cliente
+
+**Função:** `criar_cliente(...)`  
+**Uso:** Cadastrar novo cliente final  
+**Requer:** 🔐 Usuário autenticado
+
+#### Parâmetros
+
+| Campo | Tipo | Obrigatório | Descrição |
+|-------|------|-------------|-----------|
+| `p_nome` | `TEXT` | ✅ Sim | Nome completo do cliente |
+| `p_nome_visualizacao` | `TEXT` | ❌ Não | Nome para exibição (apelido) |
+| `p_whatsapp` | `TEXT` | ❌ Não | WhatsApp (apenas números) |
+| `p_cpf_cnpj` | `VARCHAR(14)` | ❌ Não | CPF (11 dígitos) ou CNPJ (14 dígitos) |
+| `p_tipo_pessoa` | `enum_tipo_pessoa` | ❌ Não* | `FISICA` ou `JURIDICA` |
+| `p_email` | `TEXT` | ❌ Não | Email válido |
+| `p_rua` | `TEXT` | ❌ Não | Endereço - Rua |
+| `p_numero` | `TEXT` | ❌ Não | Endereço - Número |
+| `p_complemento` | `TEXT` | ❌ Não | Endereço - Complemento |
+| `p_bairro` | `TEXT` | ❌ Não | Endereço - Bairro |
+| `p_cidade` | `TEXT` | ❌ Não | Endereço - Cidade |
+| `p_uf` | `CHAR(2)` | ❌ Não | Estado (sigla, ex: SP) |
+| `p_cep` | `VARCHAR(8)` | ❌ Não | CEP (apenas números) |
+| `p_observacao` | `TEXT` | ❌ Não | Observações gerais |
+
+**\*Nota:** `p_tipo_pessoa` é **obrigatório** se `p_cpf_cnpj` for informado.
+
+#### Validações
+
+- ✅ Nome é obrigatório e não pode ser vazio
+- ✅ CPF/CNPJ deve ser único por assinante
+- ✅ WhatsApp é normalizado (remove formatação)
+- ✅ Email deve ter formato válido
+- ✅ CEP deve ter 8 dígitos
+- ✅ UF deve ter 2 caracteres
+
+#### Response - Sucesso
+
+```typescript
+{
+  status: "OK",
+  message: "Cliente criado com sucesso.",
+  data: {
+    cliente_id: "uuid-do-cliente"
+  }
+}
+```
+
+#### Response - Erro (CPF/CNPJ Duplicado)
+
+```typescript
+{
+  status: "ERROR",
+  code: "CPF_CNPJ_JA_CADASTRADO",
+  message: "Já existe um cliente cadastrado com este CPF/CNPJ.",
+  data: {
+    cliente_existente_id: "uuid-cliente-existente"
+  }
+}
+```
+
+#### Exemplo TypeScript
+
+```typescript
+import { supabase } from '@/lib/supabase'
+
+interface CriarClienteInput {
+  nome: string
+  nome_visualizacao?: string
+  whatsapp?: string
+  cpf_cnpj?: string
+  tipo_pessoa?: 'FISICA' | 'JURIDICA'
+  email?: string
+  endereco?: {
+    rua?: string
+    numero?: string
+    complemento?: string
+    bairro?: string
+    cidade?: string
+    uf?: string
+    cep?: string
+  }
+  observacao?: string
+}
+
+async function criarCliente(input: CriarClienteInput) {
+  const { data, error } = await supabase.rpc('criar_cliente', {
+    p_nome: input.nome,
+    p_nome_visualizacao: input.nome_visualizacao,
+    p_whatsapp: input.whatsapp,
+    p_cpf_cnpj: input.cpf_cnpj,
+    p_tipo_pessoa: input.tipo_pessoa,
+    p_email: input.email,
+    p_rua: input.endereco?.rua,
+    p_numero: input.endereco?.numero,
+    p_complemento: input.endereco?.complemento,
+    p_bairro: input.endereco?.bairro,
+    p_cidade: input.endereco?.cidade,
+    p_uf: input.endereco?.uf,
+    p_cep: input.endereco?.cep,
+    p_observacao: input.observacao
+  })
+
+  if (error) {
+    console.error('Erro ao criar cliente:', error)
+    return { sucesso: false, erro: error.message }
+  }
+
+  if (data.status === 'ERROR') {
+    return {
+      sucesso: false,
+      erro: data.message,
+      codigo: data.code,
+      clienteExistenteId: data.data?.cliente_existente_id
+    }
+  }
+
+  return {
+    sucesso: true,
+    clienteId: data.data.cliente_id
+  }
+}
+```
+
+#### Exemplo React Component
+
+```tsx
+'use client'
+
+import { useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+interface FormData {
+  nome: string
+  whatsapp: string
+  email: string
+  cpf_cnpj: string
+}
+
+export function FormularioCadastroCliente({ onSucesso }: { onSucesso: () => void }) {
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setLoading(true)
+    setErro('')
+
+    const formData = new FormData(e.currentTarget)
+
+    const { data, error } = await supabase.rpc('criar_cliente', {
+      p_nome: formData.get('nome'),
+      p_whatsapp: formData.get('whatsapp'),
+      p_email: formData.get('email'),
+      p_cpf_cnpj: formData.get('cpf_cnpj'),
+      p_tipo_pessoa: 'FISICA'
+    })
+
+    setLoading(false)
+
+    if (error || data?.status === 'ERROR') {
+      setErro(data?.message || error.message)
+      return
+    }
+
+    onSucesso()
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label>Nome Completo *</label>
+        <input 
+          type="text" 
+          name="nome" 
+          required 
+          className="w-full border rounded px-3 py-2"
+        />
+      </div>
+
+      <div>
+        <label>WhatsApp</label>
+        <input 
+          type="tel" 
+          name="whatsapp" 
+          placeholder="(11) 99999-9999"
+          className="w-full border rounded px-3 py-2"
+        />
+      </div>
+
+      <div>
+        <label>Email</label>
+        <input 
+          type="email" 
+          name="email" 
+          className="w-full border rounded px-3 py-2"
+        />
+      </div>
+
+      <div>
+        <label>CPF</label>
+        <input 
+          type="text" 
+          name="cpf_cnpj" 
+          placeholder="000.000.000-00"
+          className="w-full border rounded px-3 py-2"
+        />
+      </div>
+
+      {erro && (
+        <div className="alert alert-error">
+          {erro}
+        </div>
+      )}
+
+      <button 
+        type="submit" 
+        disabled={loading}
+        className="btn btn-primary w-full"
+      >
+        {loading ? 'Cadastrando...' : 'Cadastrar Cliente'}
+      </button>
+    </form>
+  )
+}
+```
+
+---
+
+### 2. Atualizar Cliente
+
+**Função:** `atualizar_cliente(...)`  
+**Uso:** Atualizar dados de um cliente existente  
+**Requer:** 🔐 Usuário autenticado
+
+#### Parâmetros
+
+| Campo | Tipo | Obrigatório | Descrição |
+|-------|------|-------------|-----------|
+| `p_cliente_id` | `UUID` | ✅ Sim | ID do cliente a ser atualizado |
+| Demais campos | ... | ❌ Não | Mesmos da criação |
+
+**Importante:** 
+- **`NULL`**: Mantém o valor atual
+- **String vazia `''`**: Limpa o campo (define como NULL)
+- **Valor**: Atualiza o campo
+
+#### Exemplo TypeScript
+
+```typescript
+async function atualizarCliente(clienteId: string, dados: Partial<CriarClienteInput>) {
+  const { data, error } = await supabase.rpc('atualizar_cliente', {
+    p_cliente_id: clienteId,
+    p_nome: dados.nome ?? null,
+    p_whatsapp: dados.whatsapp ?? null,
+    p_email: dados.email ?? null,
+    // ... outros campos
+  })
+
+  if (error || data?.status === 'ERROR') {
+    return { sucesso: false, erro: data?.message || error.message }
+  }
+
+  return { sucesso: true }
+}
+```
+
+---
+
+### 3. Obter Cliente por ID
+
+**Função:** `obter_cliente(cliente_id)`  
+**Uso:** Buscar dados completos de um cliente  
+**Requer:** 🔐 Usuário autenticado
+
+#### Parâmetros
+
+| Campo | Tipo | Obrigatório | Descrição |
+|-------|------|-------------|-----------|
+| `p_cliente_id` | `UUID` | ✅ Sim | ID do cliente |
+
+#### Response
+
+```typescript
+{
+  status: "OK",
+  message: "Cliente obtido com sucesso.",
+  data: {
+    cliente_id: "uuid",
+    data: {
+      id: "uuid",
+      nome: "João Silva",
+      nome_visualizacao: "João",
+      whatsapp: "5511999999999",
+      cpf_cnpj: "12345678900",
+      tipo_pessoa: "FISICA",
+      email: "joao@email.com",
+      rua: "Rua A",
+      numero: "123",
+      complemento: "Apto 45",
+      bairro: "Centro",
+      cidade: "São Paulo",
+      uf: "SP",
+      cep: "01234567",
+      observacao: "Cliente VIP",
+      ind_ativo: true,
+      criado_em: "2024-01-01T00:00:00Z",
+      modificado_em: "2024-01-01T00:00:00Z"
+    }
+  }
+}
+```
+
+#### Exemplo TypeScript
+
+```typescript
+async function obterCliente(clienteId: string) {
+  const { data, error } = await supabase.rpc('obter_cliente', {
+    p_cliente_id: clienteId
+  })
+
+  if (error || data?.status === 'ERROR') {
+    return { sucesso: false, erro: data?.message || error.message }
+  }
+
+  return {
+    sucesso: true,
+    cliente: data.data.data
+  }
+}
+```
+
+---
+
+### 4. Buscar Cliente por CPF/CNPJ
+
+**Função:** `buscar_cliente_por_cpf_cnpj(cpf_cnpj)`  
+**Uso:** Verificar se cliente já existe antes de cadastrar  
+**Requer:** 🔐 Usuário autenticado
+
+#### Exemplo TypeScript
+
+```typescript
+async function buscarClientePorCPF(cpfCnpj: string) {
+  const { data, error } = await supabase.rpc('buscar_cliente_por_cpf_cnpj', {
+    p_cpf_cnpj: cpfCnpj.replace(/\D/g, '') // Remove formatação
+  })
+
+  if (error) {
+    return { encontrado: false }
+  }
+
+  if (data?.status === 'ERROR') {
+    return { encontrado: false }
+  }
+
+  return {
+    encontrado: true,
+    cliente: data.data.data
+  }
+}
+```
+
+---
+
+### 5. Listar Clientes (com Paginação)
+
+**Função:** `listar_clientes(filtros?)`  
+**Uso:** Listar clientes com filtros e paginação  
+**Requer:** 🔐 Usuário autenticado
+
+#### Parâmetros (Todos opcionais)
+
+| Campo | Tipo | Default | Descrição |
+|-------|------|---------|-----------|
+| `p_nome` | `TEXT` | `null` | Filtrar por nome (busca parcial) |
+| `p_cpf_cnpj` | `VARCHAR(14)` | `null` | Filtrar por CPF/CNPJ |
+| `p_email` | `TEXT` | `null` | Filtrar por email |
+| `p_whatsapp` | `TEXT` | `null` | Filtrar por WhatsApp |
+| `p_ind_ativo` | `BOOLEAN` | `null` | Filtrar por status (true/false/null=todos) |
+| `p_limit` | `INTEGER` | `100` | Máximo de registros (máx: 1000) |
+| `p_offset` | `INTEGER` | `0` | Paginação - início |
+
+#### Response
+
+Retorna **array de clientes** diretamente (não é JSONB):
+
+```typescript
+[
+  {
+    id: "uuid",
+    nome: "João Silva",
+    nome_visualizacao: "João",
+    whatsapp: "5511999999999",
+    cpf_cnpj: "12345678900",
+    tipo_pessoa: "FISICA",
+    email: "joao@email.com",
+    // ... todos os campos
+    ind_ativo: true,
+    criado_em: "2024-01-01T00:00:00Z",
+    modificado_em: "2024-01-01T00:00:00Z"
+  },
+  // ... mais clientes
+]
+```
+
+#### Exemplo TypeScript
+
+```typescript
+interface ListarClientesInput {
+  nome?: string
+  cpf_cnpj?: string
+  email?: string
+  whatsapp?: string
+  ind_ativo?: boolean
+  limit?: number
+  offset?: number
+}
+
+async function listarClientes(filtros?: ListarClientesInput) {
+  const { data, error } = await supabase.rpc('listar_clientes', {
+    p_nome: filtros?.nome,
+    p_cpf_cnpj: filtros?.cpf_cnpj,
+    p_email: filtros?.email,
+    p_whatsapp: filtros?.whatsapp,
+    p_ind_ativo: filtros?.ind_ativo,
+    p_limit: filtros?.limit ?? 100,
+    p_offset: filtros?.offset ?? 0
+  })
+
+  if (error) {
+    console.error('Erro ao listar clientes:', error)
+    return { sucesso: false, erro: error.message, clientes: [] }
+  }
+
+  return {
+    sucesso: true,
+    clientes: data || []
+  }
+}
+```
+
+#### Exemplo React Component com Paginação
+
+```tsx
+'use client'
+
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+interface Cliente {
+  id: string
+  nome: string
+  whatsapp: string
+  email: string
+  ind_ativo: boolean
+}
+
+export function ListaClientes() {
+  const [clientes, setClientes] = useState<Cliente[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filtros, setFiltros] = useState({
+    nome: '',
+    ind_ativo: undefined as boolean | undefined,
+    limit: 50,
+    offset: 0
+  })
+
+  useEffect(() => {
+    carregarClientes()
+  }, [filtros])
+
+  async function carregarClientes() {
+    setLoading(true)
+
+    const { data, error } = await supabase.rpc('listar_clientes', {
+      p_nome: filtros.nome || null,
+      p_ind_ativo: filtros.ind_ativo ?? null,
+      p_limit: filtros.limit,
+      p_offset: filtros.offset
+    })
+
+    setLoading(false)
+
+    if (!error) {
+      setClientes(data || [])
+    }
+  }
+
+  function proximaPagina() {
+    setFiltros(prev => ({ ...prev, offset: prev.offset + prev.limit }))
+  }
+
+  function paginaAnterior() {
+    setFiltros(prev => ({ ...prev, offset: Math.max(0, prev.offset - prev.limit) }))
+  }
+
+  if (loading) return <p>Carregando...</p>
+
+  return (
+    <div>
+      {/* Filtros */}
+      <div className="mb-4 flex gap-4">
+        <input
+          type="text"
+          placeholder="Buscar por nome..."
+          value={filtros.nome}
+          onChange={(e) => setFiltros(prev => ({ ...prev, nome: e.target.value, offset: 0 }))}
+          className="border rounded px-3 py-2"
+        />
+
+        <select
+          value={filtros.ind_ativo === undefined ? '' : filtros.ind_ativo.toString()}
+          onChange={(e) => setFiltros(prev => ({
+            ...prev,
+            ind_ativo: e.target.value === '' ? undefined : e.target.value === 'true',
+            offset: 0
+          }))}
+          className="border rounded px-3 py-2"
+        >
+          <option value="">Todos</option>
+          <option value="true">Ativos</option>
+          <option value="false">Inativos</option>
+        </select>
+      </div>
+
+      {/* Lista */}
+      <div className="space-y-2">
+        {clientes.map(cliente => (
+          <div key={cliente.id} className="card border rounded p-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="font-semibold">{cliente.nome}</h3>
+                <p className="text-sm text-gray-600">
+                  {cliente.whatsapp && `📱 ${cliente.whatsapp}`}
+                  {cliente.email && ` | 📧 ${cliente.email}`}
+                </p>
+              </div>
+              <div>
+                {cliente.ind_ativo ? (
+                  <span className="badge badge-success">Ativo</span>
+                ) : (
+                  <span className="badge badge-secondary">Inativo</span>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Paginação */}
+      <div className="mt-4 flex justify-between items-center">
+        <button
+          onClick={paginaAnterior}
+          disabled={filtros.offset === 0}
+          className="btn btn-outline"
+        >
+          Anterior
+        </button>
+
+        <span className="text-sm text-gray-600">
+          Exibindo {filtros.offset + 1} - {filtros.offset + clientes.length}
+        </span>
+
+        <button
+          onClick={proximaPagina}
+          disabled={clientes.length < filtros.limit}
+          className="btn btn-outline"
+        >
+          Próxima
+        </button>
+      </div>
+    </div>
+  )
+}
+```
+
+---
+
+### 6. Ativar Cliente
+
+**Função:** `ativar_cliente(cliente_id)`  
+**Uso:** Ativar cliente previamente desativado  
+**Requer:** 🔐 Usuário autenticado
+
+```typescript
+async function ativarCliente(clienteId: string) {
+  const { data, error } = await supabase.rpc('ativar_cliente', {
+    p_cliente_id: clienteId
+  })
+
+  if (error || data?.status === 'ERROR') {
+    return { sucesso: false, erro: data?.message || error.message }
+  }
+
+  return { sucesso: true }
+}
+```
+
+---
+
+### 7. Desativar Cliente
+
+**Função:** `desativar_cliente(cliente_id)`  
+**Uso:** Desativar cliente (soft delete - preserva dados)  
+**Requer:** 🔐 Usuário autenticado
+
+```typescript
+async function desativarCliente(clienteId: string) {
+  const { data, error } = await supabase.rpc('desativar_cliente', {
+    p_cliente_id: clienteId
+  })
+
+  if (error || data?.status === 'ERROR') {
+    return { sucesso: false, erro: data?.message || error.message }
+  }
+
+  return { sucesso: true }
+}
+```
+
+---
+
+### 8. Excluir Cliente
+
+**Função:** `excluir_cliente(cliente_id)`  
+**Uso:** Excluir cliente permanentemente (hard delete)  
+**Requer:** 🔐 Usuário autenticado
+
+**⚠️ ATENÇÃO:** Esta ação é **irreversível**! Prefira usar `desativar_cliente`.
+
+```typescript
+async function excluirCliente(clienteId: string) {
+  // Confirmação recomendada
+  if (!confirm('Tem certeza? Esta ação não pode ser desfeita!')) {
+    return { sucesso: false, erro: 'Ação cancelada' }
+  }
+
+  const { data, error } = await supabase.rpc('excluir_cliente', {
+    p_cliente_id: clienteId
+  })
+
+  if (error || data?.status === 'ERROR') {
+    return { sucesso: false, erro: data?.message || error.message }
+  }
+
+  return { sucesso: true }
+}
+```
+
+---
+
+## 🔐 Tratamento de Erros
+
+Todas as APIs seguem o padrão de resposta unificado:
+
+```typescript
+// Resposta de SUCESSO
+{
+  status: "OK",
+  message: "Mensagem descritiva",
+  data: { /* dados específicos */ }
+}
+
+// Resposta de ERRO
+{
+  status: "ERROR",
+  message: "Mensagem descritiva do erro",
+  code: "CODIGO_ERRO",
+  data: { /* dados adicionais se houver */ }
+}
+```
+
+### Códigos de Erro Comuns
+
+| Código | Descrição | Solução |
+|--------|-----------|---------|
+| `NOME_OBRIGATORIO` | Nome não fornecido | Validar campo obrigatório |
+| `CPF_CNPJ_JA_CADASTRADO` | CPF/CNPJ duplicado | Usar cliente existente ou atualizar |
+| `EMAIL_INVALIDO` | Formato de email inválido | Validar formato no frontend |
+| `WHATSAPP_INVALIDO` | WhatsApp com formato inválido | Validar apenas números |
+| `CEP_INVALIDO` | CEP deve ter 8 dígitos | Validar tamanho |
+| `CLIENTE_NAO_ENCONTRADO` | Cliente não existe | Verificar ID |
+| `CLIENTE_NAO_PERTENCE_ASSINANTE` | Cliente de outro assinante | Validar permissões |
+| `CLIENTE_JA_ATIVO` | Cliente já está ativo | Verificar status antes |
+| `CLIENTE_JA_INATIVO` | Cliente já está inativo | Verificar status antes |
+
+---
+
+## 📝 Notas Importantes
+
+1. **Autenticação Obrigatória** 🔐
+   - Todas as APIs exigem usuário autenticado
+   - Token é passado automaticamente pelo Supabase client
+   - Sem autenticação = erro 401
+
+2. **Isolamento Multi-tenant**
+   - Cada assinante só vê seus próprios clientes
+   - Não é necessário passar `assinante_id` como parâmetro
+   - Sistema valida automaticamente via `auth.uid()`
+
+3. **Normalização Automática**
+   - **WhatsApp**: Remove formatação, mantém apenas números
+   - **CPF/CNPJ**: Remove formatação, mantém apenas números
+   - **CEP**: Remove formatação, mantém apenas números
+
+4. **Soft Delete vs Hard Delete**
+   - **`desativar_cliente`**: Recomendado (mantém dados, pode reativar)
+   - **`excluir_cliente`**: Irreversível (apaga permanentemente)
+
+5. **Atualização Parcial**
+   - Use `null` para manter valor atual
+   - Use `''` (string vazia) para limpar campo opcional
+
+6. **Validação de Duplicidade**
+   - CPF/CNPJ é único por assinante
+   - Backend retorna `cliente_existente_id` em caso de duplicidade
+   - Frontend pode oferecer opção de usar cliente existente
+
+7. **Paginação**
+   - Limite padrão: 100 registros
+   - Limite máximo: 1000 registros
+   - Use `offset` para navegar páginas
+
+8. **Ordenação**
+   - Clientes ativos aparecem primeiro
+   - Depois ordenados por nome (A-Z)
+
+---
+
+## 🎯 Fluxos de UI Comuns
+
+### Fluxo 1: Cadastro de Cliente
+
+```tsx
+'use client'
+
+import { useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+export function CadastroCliente() {
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState('')
+  const [sucesso, setSucesso] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setLoading(true)
+    setErro('')
+    setSucesso(false)
+
+    const formData = new FormData(e.currentTarget)
+
+    // 1. Verificar se CPF já existe (opcional)
+    const cpfCnpj = formData.get('cpf_cnpj') as string
+    if (cpfCnpj) {
+      const { data: buscaData } = await supabase.rpc('buscar_cliente_por_cpf_cnpj', {
+        p_cpf_cnpj: cpfCnpj.replace(/\D/g, '')
+      })
+
+      if (buscaData?.status === 'OK') {
+        setErro('Já existe um cliente com este CPF. Deseja editar o cadastro existente?')
+        setLoading(false)
+        return
+      }
+    }
+
+    // 2. Criar cliente
+    const { data, error } = await supabase.rpc('criar_cliente', {
+      p_nome: formData.get('nome'),
+      p_whatsapp: formData.get('whatsapp'),
+      p_email: formData.get('email'),
+      p_cpf_cnpj: cpfCnpj.replace(/\D/g, '') || null,
+      p_tipo_pessoa: 'FISICA'
+    })
+
+    setLoading(false)
+
+    if (error || data?.status === 'ERROR') {
+      setErro(data?.message || error.message)
+      return
+    }
+
+    setSucesso(true)
+    // Redirecionar ou limpar formulário
+  }
+
+  if (sucesso) {
+    return (
+      <div className="alert alert-success">
+        Cliente cadastrado com sucesso!
+      </div>
+    )
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Campos do formulário */}
+      {erro && <div className="alert alert-error">{erro}</div>}
+      <button type="submit" disabled={loading}>
+        {loading ? 'Cadastrando...' : 'Cadastrar'}
+      </button>
+    </form>
+  )
+}
+```
+
+---
+
+### Fluxo 2: Busca e Edição
+
+```tsx
+async function buscarEEditar(cpfCnpj: string) {
+  // 1. Buscar cliente
+  const { data: buscaData } = await supabase.rpc('buscar_cliente_por_cpf_cnpj', {
+    p_cpf_cnpj: cpfCnpj
+  })
+
+  if (buscaData?.status === 'OK') {
+    const cliente = buscaData.data.data
+
+    // 2. Exibir modal de edição com dados preenchidos
+    // ...
+
+    // 3. Atualizar quando usuário submeter
+    const { data: updateData } = await supabase.rpc('atualizar_cliente', {
+      p_cliente_id: cliente.id,
+      p_nome: novoNome,
+      // ... outros campos
+    })
+  }
+}
+```
+
+---
+
+### Fluxo 3: Lista com Ações
+
+```tsx
+export function TabelaClientes() {
+  const [clientes, setClientes] = useState([])
+
+  async function handleDesativar(clienteId: string) {
+    const { data } = await supabase.rpc('desativar_cliente', {
+      p_cliente_id: clienteId
+    })
+
+    if (data?.status === 'OK') {
+      // Recarregar lista
+      carregarClientes()
+    }
+  }
+
+  return (
+    <table>
+      {clientes.map(cliente => (
+        <tr key={cliente.id}>
+          <td>{cliente.nome}</td>
+          <td>
+            {cliente.ind_ativo ? (
+              <button onClick={() => handleDesativar(cliente.id)}>
+                Desativar
+              </button>
+            ) : (
+              <button onClick={() => handleAtivar(cliente.id)}>
+                Ativar
+              </button>
+            )}
+          </td>
+        </tr>
+      ))}
+    </table>
+  )
+}
+```
+
+---
+
+## 🚀 Checklist de Implementação
+
+### Backend (✅ Completo)
+- ✅ Tabela `cliente` criada com todos os campos
+- ✅ Funções `app_internal` implementadas
+- ✅ APIs RPC públicas criadas
+- ✅ RLS configurado
+
+### Frontend (⏳ A fazer)
+- [ ] Página de listagem de clientes
+- [ ] Formulário de cadastro
+- [ ] Formulário de edição
+- [ ] Busca por CPF/CNPJ
+- [ ] Filtros e paginação
+- [ ] Ações de ativar/desativar
+- [ ] Validação de campos no frontend
+
+---
+
+## 📚 Recursos Adicionais
+
+- [Planejamento Fase 2](../../../../docs/backend/Fase%202/PLANO_FASE2_GESTAO_CLIENTES.md)
+- [Funções Internas app_internal](../../app_internal/cliente_final/cliente.sql)
+
+---
+
+**Última Atualização**: Novembro 2025  
+**Status**: Documentação completa - Pronto para implementação frontend
+
