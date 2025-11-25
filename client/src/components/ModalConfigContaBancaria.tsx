@@ -20,6 +20,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import { callEdgeFunction, extractFriendlyErrorMessage } from '@/lib/api-helper';
 import { Loader2, Building2, AlertTriangle, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { useValidarContaDuplicada, useRecebedor } from '@/hooks/useRecebedor';
 import ComboboxBanco from '@/components/ComboboxBanco';
@@ -112,28 +113,30 @@ export default function ModalConfigContaBancaria({
     setEstado('cadastrando');
 
     try {
-      const { data, error } = await supabase.functions.invoke('cadastrar_recebedor', {
-        body: {
+      const response = await callEdgeFunction<CadastrarRecebedorResponse>(
+        supabase,
+        'cadastrar_recebedor',
+        {
           instituicao_id: formData.instituicao_id,
           agencia: formData.agencia.replace(/\D/g, ''),
           conta: formData.conta.replace(/\D/g, ''),
           tipo_conta: formData.tipo_conta,
         },
-      });
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      const response = data as CadastrarRecebedorResponse;
+        'Erro ao cadastrar conta bancária. Tente novamente.'
+      );
 
       if (response.status === 'error') {
+        const friendlyMessage = extractFriendlyErrorMessage(
+          { code: response.code, message: response.message },
+          'Erro ao cadastrar conta bancária. Tente novamente.'
+        );
+        
         if (response.data?.recebedor_id) {
           setRecebedorErroId(response.data.recebedor_id);
-          setErro(response.message || 'Falha ao cadastrar na Pluggy. Tente novamente.');
+          setErro(friendlyMessage);
           setEstado('erro_retry');
         } else {
-          setErro(response.message || 'Erro ao cadastrar conta bancária.');
+          setErro(friendlyMessage);
           setEstado('formulario');
         }
         return;
@@ -153,7 +156,8 @@ export default function ModalConfigContaBancaria({
       }, 1500);
     } catch (err: any) {
       console.error('Erro ao cadastrar recebedor:', err);
-      setErro(err.message || 'Erro inesperado ao cadastrar conta.');
+      const friendlyMessage = extractFriendlyErrorMessage(err, 'Erro ao cadastrar conta bancária. Tente novamente.');
+      setErro(friendlyMessage);
       setEstado('formulario');
     }
   };
@@ -165,18 +169,19 @@ export default function ModalConfigContaBancaria({
     setErro('');
 
     try {
-      const { data, error } = await supabase.functions.invoke('ativar_recebedor', {
-        body: { recebedor_id: recebedorErroId },
-      });
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      const response = data as AtivarRecebedorResponse;
+      const response = await callEdgeFunction<AtivarRecebedorResponse>(
+        supabase,
+        'ativar_recebedor',
+        { recebedor_id: recebedorErroId },
+        'Erro ao ativar conta bancária. Tente novamente.'
+      );
 
       if (response.status === 'error') {
-        setErro(response.message || 'Falha ao ativar conta. Tente novamente.');
+        const friendlyMessage = extractFriendlyErrorMessage(
+          { code: response.code, message: response.message },
+          'Falha ao ativar conta. Tente novamente.'
+        );
+        setErro(friendlyMessage);
         setEstado('erro_retry');
         return;
       }
@@ -197,7 +202,8 @@ export default function ModalConfigContaBancaria({
       }, 1500);
     } catch (err: any) {
       console.error('Erro ao ativar recebedor:', err);
-      setErro(err.message || 'Erro inesperado ao ativar conta.');
+      const friendlyMessage = extractFriendlyErrorMessage(err, 'Erro ao ativar conta bancária. Tente novamente.');
+      setErro(friendlyMessage);
       setEstado('erro_retry');
     }
   };

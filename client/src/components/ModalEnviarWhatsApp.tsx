@@ -24,7 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { TemplateWhatsApp, ApiResponse } from "@/types/template-whatsapp";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { callSupabase } from "@/lib/api-helper";
+import { callSupabase, extractFriendlyErrorMessage, ERROR_MESSAGES } from "@/lib/api-helper";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface ModalEnviarWhatsAppProps {
@@ -134,23 +134,10 @@ export default function ModalEnviarWhatsApp({
       onClose();
     },
     onError: (error: any) => {
-      // Mapear códigos de erro da Edge Function para mensagens amigáveis
-      const errorMessages: Record<string, string> = {
-        'UNAUTHORIZED': 'Você não está autorizado. Faça login novamente.',
-        'INVALID_PAYLOAD': 'Dados inválidos. Verifique as informações e tente novamente.',
-        'TEMPLATE_NAO_ENCONTRADO': 'Template não encontrado. Selecione outro template.',
-        'PLACEHOLDER_ERROR': 'Faltam dados obrigatórios no template. Verifique os placeholders.',
-        'N8N_ERROR': 'Erro ao enviar mensagem. Tente novamente em alguns instantes.',
-        'INTERNAL_ERROR': 'Erro interno do servidor. Tente novamente mais tarde.',
-      };
-
-      const errorCode = error?.code || 'UNKNOWN_ERROR';
-      const errorMessage = errorMessages[errorCode] || error?.message || 'Erro desconhecido ao enviar mensagem';
-
       toast({
         variant: "destructive",
         title: "Erro ao enviar mensagem",
-        description: errorMessage,
+        description: extractFriendlyErrorMessage(error, 'Não foi possível enviar a mensagem. Tente novamente.'),
       });
     },
   });

@@ -11,7 +11,7 @@ import ModalPagamento from "@/components/ModalPagamento";
 import ModalCancelamento from "@/components/ModalCancelamento";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
-import { callSupabase, ApiError } from "@/lib/api-helper";
+import { callSupabase, ApiError, extractFriendlyErrorMessage } from "@/lib/api-helper";
 import { queryClient } from "@/lib/queryClient";
 import { formatDate, formatCurrency } from "@/lib/masks";
 import { Loader2, CreditCard, AlertCircle, CheckCircle, TrendingUp, History } from "lucide-react";
@@ -148,14 +148,14 @@ export default function AssinaturaPage() {
           // Erro genérico
           toast({
             title: 'Erro ao criar assinatura',
-            description: error.message,
+            description: extractFriendlyErrorMessage(error, 'Não foi possível criar a assinatura. Tente novamente.'),
             variant: 'destructive',
           });
         }
       } else {
         toast({
           title: 'Erro ao criar assinatura',
-          description: error.message || 'Ocorreu um erro inesperado.',
+          description: extractFriendlyErrorMessage(error, 'Não foi possível criar a assinatura. Tente novamente.'),
           variant: 'destructive',
         });
       }
@@ -267,14 +267,14 @@ export default function AssinaturaPage() {
         } else {
           toast({
             title: 'Erro ao iniciar pagamento',
-            description: error.message,
+            description: extractFriendlyErrorMessage(error, 'Não foi possível iniciar o pagamento. Tente novamente.'),
             variant: 'destructive',
           });
         }
       } else {
         toast({
           title: 'Erro ao iniciar pagamento',
-          description: error.message || 'Ocorreu um erro inesperado.',
+          description: extractFriendlyErrorMessage(error, 'Não foi possível iniciar o pagamento. Tente novamente.'),
           variant: 'destructive',
         });
       }
@@ -309,7 +309,7 @@ export default function AssinaturaPage() {
     onError: (error: any) => {
       toast({
         title: 'Erro ao cancelar assinatura',
-        description: error.message || 'Não foi possível cancelar a assinatura. Tente novamente.',
+        description: extractFriendlyErrorMessage(error, 'Não foi possível cancelar a assinatura. Tente novamente.'),
         variant: 'destructive',
       });
     },

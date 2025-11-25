@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { formatWhatsApp, unformatWhatsApp } from "@/lib/masks";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { callSupabase, ApiError } from "@/lib/api-helper";
+import { callSupabase, ApiError, extractFriendlyErrorMessage } from "@/lib/api-helper";
 import { useToast } from "@/hooks/use-toast";
 
 interface OnboardingFormProps {
@@ -100,7 +100,7 @@ export default function OnboardingForm({ onComplete }: OnboardingFormProps) {
       toast({
         variant: "destructive",
         title: "Erro ao salvar",
-        description: error.message || "Ocorreu um erro inesperado.",
+        description: extractFriendlyErrorMessage(error, "Não foi possível salvar seus dados. Tente novamente."),
       });
     } finally {
       setIsLoading(false);
