@@ -66,3 +66,11 @@ export function formatDate(dateString: string | null | undefined): string {
   // Criar data local sem conversão de timezone
   return new Date(year, month - 1, day).toLocaleDateString('pt-BR');
 }
+
+export function formatCPFCNPJ(value: string): string {
+  const numbers = value.replace(/\D/g, '');
+  if (numbers.length <= 11) {
+    return formatCPF(numbers);
+  }
+  return formatCNPJ(numbers);
+}
