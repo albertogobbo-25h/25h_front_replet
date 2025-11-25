@@ -82,7 +82,7 @@ export function useInstituicoesFinanceiras() {
   return useQuery<InstituicaoFinanceira[]>({
     queryKey: ['/api/instituicoes-financeiras'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('listar_instituicoes_pluggy');
+      const { data, error } = await supabase.rpc('listar_instituicoes_financeiras');
       
       if (error) {
         console.error('Erro ao listar instituições:', error);

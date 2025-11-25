@@ -36,7 +36,7 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 ### Feature Specifications
 - **Authentication**: Login/Signup, onboarding with name and WhatsApp, automatic Free plan creation on signup, session management, route protection, role-based access control (ADMIN, PROFISSIONAL, CLIENTE).
 - **Dashboard**: KPI cards (revenue, clients, charges), recent charges table, trend indicators.
-- **Client Management**: List clients, CRUD operations (create, read, update, activate/deactivate), client details.
+- **Client Management**: Complete CRUD via Supabase RPCs (`listar_clientes`, `criar_cliente`, `atualizar_cliente`, `ativar_cliente`, `desativar_cliente`, `buscar_cliente_por_cpf_cnpj`). Fields: nome, nome_visualizacao, cpf_cnpj, tipo_pessoa (FISICA/JURIDICA), email, whatsapp, full address (rua, numero, complemento, bairro, cidade, uf, cep), observacao, ind_ativo. CPF/CNPJ duplicate validation before creation. Filters by name and status with automatic refresh. Uses `useClientes.ts` hooks for all operations.
 - **Client Plans Management**: Create and manage service plans for clients (VALOR_FIXO, PACOTE, VALOR_VARIAVEL), CRUD operations, dynamic form fields.
 - **Charge Management**: Complete CRUD operations for charges, create standalone charges, list charges with Supabase integration, dynamic status calculation (EM_ABERTO, VENCIDO, PAGO, CANCELADO, FALHOU), comprehensive filters, dynamic totalizers, actions on charges (view details, send via WhatsApp with template selection, mark as paid manually, cancel).
 - **Templates WhatsApp**: Complete CRUD for WhatsApp message templates with markdown support, automatic placeholder extraction, real-time preview, tabbed interface (Editor | Preview), integrates with Supabase RPCs (`listar_templates_whatsapp`, `criar_template_whatsapp`, `atualizar_template_whatsapp`, `excluir_template_whatsapp`), automatic tipo generation via slugify, backend extracts and returns placeholders automatically.
@@ -66,7 +66,7 @@ I prefer simple language and clear, concise explanations. I want iterative devel
   - **Hooks**: `useRecebedor` (query active receiver), `useListarRecebedores`, `useInstituicoesFinanceiras`, `useValidarContaDuplicada`, `useValidarRecebedor` (action interceptor)
   - **Modal**: `ModalConfigContaBancaria` with bank selection, account details, and retry on failure
   - **Validation Flow**: Blocks client/charge creation until bank account is configured with `id_recebedor_gateway`
-  - **RPCs**: `obter_recebedor_ativo()`, `listar_recebedores()`, `listar_instituicoes_pluggy()`
+  - **RPCs**: `obter_recebedor_ativo()`, `listar_recebedores()`, `listar_instituicoes_financeiras()`
   - **Edge Functions**: `cadastrar_recebedor`, `ativar_recebedor` for Pluggy integration
   - **Integration Points**: Profile page (view/edit), Clientes page (validation alert + interception), Cobrancas page (validation alert + interception)
 
