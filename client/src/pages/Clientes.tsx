@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
 import ClienteTable from "@/components/ClienteTable";
 import ModalCliente from "@/components/ModalCliente";
 import ModalConfigContaBancaria from "@/components/ModalConfigContaBancaria";
@@ -9,14 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search, Loader2, AlertTriangle, Building2 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
-import { queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 import { useValidarRecebedor } from "@/hooks/useValidarRecebedor";
+import { useListarClientes, useAtivarCliente, useDesativarCliente } from "@/hooks/useClientes";
 import type { Cliente } from "@/types/cliente";
 
 export default function Clientes() {
-  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("todos");
   const [modalOpen, setModalOpen] = useState(false);
@@ -31,45 +27,21 @@ export default function Clientes() {
     handleModalContaClose,
   } = useValidarRecebedor();
 
-  const { data: clientes = [], isLoading } = useQuery<Cliente[]>({
-    queryKey: ['/api/clientes'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .schema('app_data')
-        .from('cliente')
-        .select('*')
-        .order('nome', { ascending: true });
+  const indAtivoFilter = useMemo(() => {
+    if (statusFilter === "ativo") return true;
+    if (statusFilter === "inativo") return false;
+    return null;
+  }, [statusFilter]);
 
-      if (error) throw error;
-      return data || [];
-    },
+  const { data: clientes = [], isLoading } = useListarClientes({
+    nome: searchTerm || undefined,
+    ind_ativo: indAtivoFilter,
+    limit: 100,
+    offset: 0,
   });
 
-  const toggleStatusMutation = useMutation({
-    mutationFn: async ({ id, novoStatus }: { id: string; novoStatus: boolean }) => {
-      const { error } = await supabase
-        .schema('app_data')
-        .from('cliente')
-        .update({ ind_ativo: novoStatus, modificado_em: new Date().toISOString() })
-        .eq('id', id);
-
-      if (error) throw error;
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/clientes'] });
-      toast({
-        title: variables.novoStatus ? 'Cliente ativado' : 'Cliente desativado',
-        description: `O cliente foi ${variables.novoStatus ? 'ativado' : 'desativado'} com sucesso`,
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Erro ao atualizar status',
-        description: error.message,
-        variant: 'destructive',
-      });
-    },
-  });
+  const ativarMutation = useAtivarCliente();
+  const desativarMutation = useDesativarCliente();
 
   const handleNovoCliente = () => {
     validarEExecutar(() => {
@@ -84,23 +56,21 @@ export default function Clientes() {
   };
 
   const handleToggleStatus = (cliente: Cliente) => {
-    toggleStatusMutation.mutate({
-      id: cliente.id,
-      novoStatus: !cliente.ind_ativo,
-    });
+    if (cliente.ind_ativo) {
+      desativarMutation.mutate(cliente.id);
+    } else {
+      ativarMutation.mutate(cliente.id);
+    }
   };
 
   const handleModalSuccess = () => {
-    queryClient.invalidateQueries({ queryKey: ['/api/clientes'] });
+    setModalOpen(false);
   };
 
-  const filteredClientes = clientes.filter(cliente => {
-    const matchesSearch = cliente.nome.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "todos" || 
-      (statusFilter === "ativo" && cliente.ind_ativo) ||
-      (statusFilter === "inativo" && !cliente.ind_ativo);
-    return matchesSearch && matchesStatus;
-  });
+  const handleModalClose = () => {
+    setModalOpen(false);
+    setClienteParaEditar(null);
+  };
 
   return (
     <div className="space-y-6">
@@ -183,7 +153,7 @@ export default function Clientes() {
               </div>
             ) : (
               <>
-                {filteredClientes.length} {filteredClientes.length === 1 ? 'cliente' : 'clientes'}
+                {clientes.length} {clientes.length === 1 ? 'cliente' : 'clientes'}
               </>
             )}
           </CardTitle>
@@ -193,13 +163,13 @@ export default function Clientes() {
             <div className="text-center py-8 text-muted-foreground">
               Carregando...
             </div>
-          ) : filteredClientes.length === 0 ? (
+          ) : clientes.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               Nenhum cliente encontrado
             </div>
           ) : (
             <ClienteTable
-              clientes={filteredClientes}
+              clientes={clientes}
               onEditar={handleEditarCliente}
               onToggleStatus={handleToggleStatus}
             />
@@ -209,7 +179,7 @@ export default function Clientes() {
 
       <ModalCliente
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={handleModalClose}
         onSuccess={handleModalSuccess}
         cliente={clienteParaEditar}
       />

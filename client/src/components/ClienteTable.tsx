@@ -1,8 +1,8 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Power, Phone } from "lucide-react";
-import { formatWhatsApp } from "@/lib/masks";
+import { Edit, Power, Phone, Mail, User } from "lucide-react";
+import { formatWhatsApp, formatCPFCNPJ } from "@/lib/masks";
 import type { Cliente } from "@/types/cliente";
 
 interface ClienteTableProps {
@@ -18,7 +18,8 @@ export default function ClienteTable({ clientes, onEditar, onToggleStatus }: Cli
         <TableHeader>
           <TableRow>
             <TableHead>Nome</TableHead>
-            <TableHead>WhatsApp</TableHead>
+            <TableHead>CPF/CNPJ</TableHead>
+            <TableHead>Contato</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="text-right">Ações</TableHead>
           </TableRow>
@@ -35,12 +36,33 @@ export default function ClienteTable({ clientes, onEditar, onToggleStatus }: Cli
                 </div>
               </TableCell>
               <TableCell>
-                {cliente.whatsapp && (
+                {cliente.cpf_cnpj ? (
                   <div className="flex items-center gap-1">
-                    <Phone className="h-3 w-3 text-muted-foreground" />
-                    <span className="font-mono text-sm">{formatWhatsApp(cliente.whatsapp)}</span>
+                    <User className="h-3 w-3 text-muted-foreground" />
+                    <span className="font-mono text-sm">{formatCPFCNPJ(cliente.cpf_cnpj)}</span>
                   </div>
+                ) : (
+                  <span className="text-muted-foreground text-sm">-</span>
                 )}
+              </TableCell>
+              <TableCell>
+                <div className="space-y-1">
+                  {cliente.whatsapp && (
+                    <div className="flex items-center gap-1">
+                      <Phone className="h-3 w-3 text-muted-foreground" />
+                      <span className="font-mono text-sm">{formatWhatsApp(cliente.whatsapp)}</span>
+                    </div>
+                  )}
+                  {cliente.email && (
+                    <div className="flex items-center gap-1">
+                      <Mail className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-sm truncate max-w-[180px]">{cliente.email}</span>
+                    </div>
+                  )}
+                  {!cliente.whatsapp && !cliente.email && (
+                    <span className="text-muted-foreground text-sm">-</span>
+                  )}
+                </div>
               </TableCell>
               <TableCell>
                 <Badge variant={cliente.ind_ativo ? "secondary" : "outline"}>
