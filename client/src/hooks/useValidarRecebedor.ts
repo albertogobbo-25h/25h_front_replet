@@ -1,10 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useRecebedor } from './useRecebedor';
 
 export function useValidarRecebedor() {
-  const { temRecebedorAtivo, loadingRecebedor, recebedorAtivo } = useRecebedor();
+  const { temRecebedorAtivo, loadingRecebedor, recebedorAtivo, refetchRecebedor, invalidarRecebedor } = useRecebedor();
   const [modalContaAberto, setModalContaAberto] = useState(false);
-  const [acaoPendente, setAcaoPendente] = useState<(() => void) | null>(null);
+  const acaoPendenteRef = useRef<(() => void) | null>(null);
 
   const validarEExecutar = useCallback((acao: () => void) => {
     if (loadingRecebedor) {
@@ -14,24 +14,29 @@ export function useValidarRecebedor() {
     if (temRecebedorAtivo) {
       acao();
     } else {
-      setAcaoPendente(() => acao);
+      acaoPendenteRef.current = acao;
       setModalContaAberto(true);
     }
   }, [temRecebedorAtivo, loadingRecebedor]);
 
-  const handleModalContaSuccess = useCallback(() => {
+  const handleModalContaSuccess = useCallback(async () => {
     setModalContaAberto(false);
-    if (acaoPendente) {
+    
+    invalidarRecebedor();
+    await refetchRecebedor();
+    
+    if (acaoPendenteRef.current) {
+      const acao = acaoPendenteRef.current;
+      acaoPendenteRef.current = null;
       setTimeout(() => {
-        acaoPendente();
-        setAcaoPendente(null);
+        acao();
       }, 100);
     }
-  }, [acaoPendente]);
+  }, [invalidarRecebedor, refetchRecebedor]);
 
   const handleModalContaClose = useCallback(() => {
     setModalContaAberto(false);
-    setAcaoPendente(null);
+    acaoPendenteRef.current = null;
   }, []);
 
   return {

@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,7 +35,6 @@ interface DadosAssinante {
 
 export default function Perfil() {
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
   const [modalContaAberto, setModalContaAberto] = useState(false);
   
   const { recebedorAtivo, temRecebedorAtivo, loadingRecebedor, invalidarRecebedor } = useRecebedor();
@@ -111,10 +109,6 @@ export default function Perfil() {
         title: 'Dados atualizados',
         description: 'Seus dados foram atualizados com sucesso',
       });
-      
-      setTimeout(() => {
-        setLocation('/');
-      }, 500);
     },
     onError: (error: any) => {
       if (error instanceof ApiError) {

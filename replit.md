@@ -11,7 +11,7 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 ### UI/UX Decisions
 - **Color Scheme**: Professional blue (`hsl(217, 91%, 60%)`) as primary, with distinct colors for success, warning, and destructive actions.
 - **Typography**: Inter for general UI, Roboto Mono for financial values and dates.
-- **Components**: Utilizes `shadcn/ui` for standardized components (`DashboardKPICard`, `StatusBadge`, `ClienteTable`, `CobrancaTable`, `AppSidebar`, `PlanCard`, `ModalCliente`, `ModalPlanoCliente`, `ModalCobranca`, `TemplatesWhatsAppTable`, `ModalTemplateWhatsApp`, `ModalEnviarWhatsApp`, `ProtectedRoute`).
+- **Components**: Utilizes `shadcn/ui` for standardized components (`DashboardKPICard`, `StatusBadge`, `ClienteTable`, `CobrancaTable`, `AppSidebar`, `PlanCard`, `ModalCliente`, `ModalPlanoCliente`, `ModalCobranca`, `ModalConfigContaBancaria`, `TemplatesWhatsAppTable`, `ModalTemplateWhatsApp`, `ModalEnviarWhatsApp`, `ProtectedRoute`).
 - **Localization**: Full Brazilian Portuguese (R$, WhatsApp masks, date formats, currency formatting).
 - **Design Principles**: Mobile-first responsive design, Dark mode support, Accessibility (WCAG AA contrast, visible labels, focus indicators).
 
@@ -60,7 +60,15 @@ I prefer simple language and clear, concise explanations. I want iterative devel
     - Coexistence of ATIVA + PENDENTE allowed (upgrade/renewal scenario)
     - Payment activation cancels previous ATIVA subscription
     - Validity projection based on previous non-free subscription
-- **Profile**: Complete integration with Supabase RPCs (`obter_dados_assinante`, `atualizar_dados_assinante`), real-time data loading, CNPJ-only validation, fields (Razão Social, Nome Fantasia, CNPJ, Email, WhatsApp, full address), Brazilian masks, loading states and error handling.
+- **Profile**: Complete integration with Supabase RPCs (`obter_dados_assinante`, `atualizar_dados_assinante`), real-time data loading, CNPJ-only validation, fields (Razão Social, Nome Fantasia, CNPJ, Email, WhatsApp, full address), Brazilian masks, loading states and error handling. Includes **Bank Account (Recebedor)** section for viewing/configuring PIX payment receiving account.
+- **Bank Account Management (Recebedor)**: Complete flow for configuring bank account before creating clients or charges:
+  - **Types**: `Recebedor`, `InstituicaoFinanceira`, `TipoConta` in `types/recebedor.ts`
+  - **Hooks**: `useRecebedor` (query active receiver), `useListarRecebedores`, `useInstituicoesFinanceiras`, `useValidarContaDuplicada`, `useValidarRecebedor` (action interceptor)
+  - **Modal**: `ModalConfigContaBancaria` with bank selection, account details, and retry on failure
+  - **Validation Flow**: Blocks client/charge creation until bank account is configured with `id_recebedor_gateway`
+  - **RPCs**: `obter_recebedor_ativo()`, `listar_recebedores()`, `listar_instituicoes_pluggy()`
+  - **Edge Functions**: `cadastrar_recebedor`, `ativar_recebedor` for Pluggy integration
+  - **Integration Points**: Profile page (view/edit), Clientes page (validation alert + interception), Cobrancas page (validation alert + interception)
 
 ### System Design Choices
 - **Public Routes**: Page `/pagar?c={uuid}` bypasses authentication check in `App.tsx` using early return pattern before AuthContext validation. Uses Supabase anon key for secure RPC call to `consultar_cobranca_publica`.
@@ -83,7 +91,8 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 - **Data Formatting**: Cadastral data is unformatted before backend transmission and formatted for frontend display.
 - **Form Protection**: User input in critical forms is protected against accidental resets.
 - **Business Rule**: The system exclusively supports Pessoa Jurídica (CNPJ).
-- **Edge Functions**: All Supabase Edge Function calls use `supabase.functions.invoke()` for automatic URL resolution, authentication header injection, and consistent error handling. Edge Functions used: `iniciar_pagto_assinante`, `cancelar_assinatura`, `enviar-mensagem-whatsapp`.
+- **Edge Functions**: All Supabase Edge Function calls use `supabase.functions.invoke()` for automatic URL resolution, authentication header injection, and consistent error handling. Edge Functions used: `iniciar_pagto_assinante`, `cancelar_assinatura`, `enviar-mensagem-whatsapp`, `cadastrar_recebedor`, `ativar_recebedor`.
+- **Recebedor Validation Pattern**: Uses modal interception pattern via `useValidarRecebedor` hook. When subscriber attempts to create client or charge without active bank account (`temRecebedorAtivo = false`), `ModalConfigContaBancaria` opens automatically. Pending action is stored and executed after successful account configuration.
 - **Role Management**: User roles fetched via RPC `obter_funcoes_usuario` on login (app_data schema not directly accessible via REST), stored in AuthContext, used for conditional UI rendering and route protection. **NOTA**: RPC `obter_funcoes_usuario` deve ser criada no backend (ver BACKEND_TODO.md). Implementação temporária usa user_metadata.roles ou user_metadata.is_admin, com fallback para role PROFISSIONAL.
 - **Subscription Business Rules**:
   - **Coexistence**: Can have one ATIVA and one PENDENTE subscription simultaneously (upgrade/renewal scenario)
