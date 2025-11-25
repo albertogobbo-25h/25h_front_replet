@@ -5,12 +5,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
 import { formatWhatsApp, unformatWhatsApp, formatCNPJ, unformatCPFCNPJ, formatCEP } from "@/lib/masks";
 import { callSupabase, ApiError } from "@/lib/api-helper";
-import { Loader2 } from "lucide-react";
+import { useRecebedor } from "@/hooks/useRecebedor";
+import { formatTipoConta } from "@/types/recebedor";
+import ModalConfigContaBancaria from "@/components/ModalConfigContaBancaria";
+import { Loader2, Building2, AlertTriangle, CheckCircle2, Settings } from "lucide-react";
 
 interface DadosAssinante {
   id: string;
@@ -32,6 +37,10 @@ interface DadosAssinante {
 export default function Perfil() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const [modalContaAberto, setModalContaAberto] = useState(false);
+  
+  const { recebedorAtivo, temRecebedorAtivo, loadingRecebedor, invalidarRecebedor } = useRecebedor();
+
   const [formData, setFormData] = useState({
     nome: '',
     nome_fantasia: '',
@@ -47,7 +56,6 @@ export default function Perfil() {
     cep: '',
   });
 
-  // Query: Obter dados do assinante
   const { data: dadosAssinante, isLoading } = useQuery<DadosAssinante | null>({
     queryKey: ['/api/assinante/dados'],
     queryFn: async () => {
@@ -57,7 +65,6 @@ export default function Perfil() {
     },
   });
 
-  // Carregar dados do assinante no formulário
   useEffect(() => {
     if (dadosAssinante) {
       setFormData({
@@ -77,7 +84,6 @@ export default function Perfil() {
     }
   }, [dadosAssinante]);
 
-  // Mutation: Atualizar dados do assinante
   const atualizarDadosMutation = useMutation({
     mutationFn: async () => {
       return await callSupabase(async () =>
@@ -106,13 +112,11 @@ export default function Perfil() {
         description: 'Seus dados foram atualizados com sucesso',
       });
       
-      // Navegar para o dashboard após salvar
       setTimeout(() => {
         setLocation('/');
       }, 500);
     },
     onError: (error: any) => {
-      // Tratamento de erros específicos conforme guia
       if (error instanceof ApiError) {
         if (error.code === 'INVALID_EMAIL') {
           toast({
@@ -326,6 +330,84 @@ export default function Perfil() {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5" />
+                Conta Bancária para Recebimento
+              </CardTitle>
+              <CardDescription>
+                Conta onde você receberá os pagamentos dos clientes via PIX
+              </CardDescription>
+            </div>
+            {temRecebedorAtivo && (
+              <Badge variant="outline" className="text-green-600 border-green-600">
+                <CheckCircle2 className="h-3 w-3 mr-1" />
+                Configurada
+              </Badge>
+            )}
+          </CardHeader>
+          <CardContent>
+            {loadingRecebedor ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : temRecebedorAtivo && recebedorAtivo ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Banco</p>
+                    <p className="font-medium" data-testid="text-banco">{recebedorAtivo.instituicao_nome}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Tipo de Conta</p>
+                    <p className="font-medium" data-testid="text-tipo-conta">
+                      {formatTipoConta(recebedorAtivo.tipo_conta)}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Agência</p>
+                    <p className="font-mono font-medium" data-testid="text-agencia">{recebedorAtivo.agencia}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Conta</p>
+                    <p className="font-mono font-medium" data-testid="text-conta">{recebedorAtivo.conta}</p>
+                  </div>
+                </div>
+                <div className="pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setModalContaAberto(true)}
+                    data-testid="button-alterar-conta"
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Alterar Conta
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    Você precisa configurar sua conta bancária para poder cadastrar clientes e gerar cobranças.
+                  </AlertDescription>
+                </Alert>
+                <Button
+                  type="button"
+                  onClick={() => setModalContaAberto(true)}
+                  data-testid="button-configurar-conta"
+                >
+                  <Building2 className="h-4 w-4 mr-2" />
+                  Configurar Conta Bancária
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         <div className="flex justify-end">
           <Button 
             type="submit" 
@@ -339,6 +421,20 @@ export default function Perfil() {
           </Button>
         </div>
       </form>
+
+      <ModalConfigContaBancaria
+        open={modalContaAberto}
+        onClose={() => setModalContaAberto(false)}
+        onSuccess={() => {
+          invalidarRecebedor();
+          setModalContaAberto(false);
+        }}
+        titulo={temRecebedorAtivo ? 'Alterar Conta Bancária' : 'Configurar Conta Bancária'}
+        descricao={temRecebedorAtivo 
+          ? 'Altere sua conta bancária para recebimento de pagamentos.'
+          : 'Configure sua conta bancária para receber pagamentos dos clientes via PIX.'
+        }
+      />
     </div>
   );
 }

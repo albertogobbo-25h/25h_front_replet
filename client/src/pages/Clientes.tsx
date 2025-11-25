@@ -2,14 +2,17 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import ClienteTable from "@/components/ClienteTable";
 import ModalCliente from "@/components/ModalCliente";
+import ModalConfigContaBancaria from "@/components/ModalConfigContaBancaria";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Loader2 } from "lucide-react";
+import { Plus, Search, Loader2, AlertTriangle, Building2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useValidarRecebedor } from "@/hooks/useValidarRecebedor";
 import type { Cliente } from "@/types/cliente";
 
 export default function Clientes() {
@@ -19,7 +22,15 @@ export default function Clientes() {
   const [modalOpen, setModalOpen] = useState(false);
   const [clienteParaEditar, setClienteParaEditar] = useState<Cliente | null>(null);
 
-  // Query: Listar clientes
+  const {
+    temRecebedorAtivo,
+    loadingRecebedor,
+    modalContaAberto,
+    validarEExecutar,
+    handleModalContaSuccess,
+    handleModalContaClose,
+  } = useValidarRecebedor();
+
   const { data: clientes = [], isLoading } = useQuery<Cliente[]>({
     queryKey: ['/api/clientes'],
     queryFn: async () => {
@@ -34,7 +45,6 @@ export default function Clientes() {
     },
   });
 
-  // Mutation: Desativar/Ativar cliente
   const toggleStatusMutation = useMutation({
     mutationFn: async ({ id, novoStatus }: { id: string; novoStatus: boolean }) => {
       const { error } = await supabase
@@ -62,8 +72,10 @@ export default function Clientes() {
   });
 
   const handleNovoCliente = () => {
-    setClienteParaEditar(null);
-    setModalOpen(true);
+    validarEExecutar(() => {
+      setClienteParaEditar(null);
+      setModalOpen(true);
+    });
   };
 
   const handleEditarCliente = (cliente: Cliente) => {
@@ -82,7 +94,6 @@ export default function Clientes() {
     queryClient.invalidateQueries({ queryKey: ['/api/clientes'] });
   };
 
-  // Filtrar clientes localmente
   const filteredClientes = clientes.filter(cliente => {
     const matchesSearch = cliente.nome.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "todos" || 
@@ -98,11 +109,39 @@ export default function Clientes() {
           <h1 className="text-3xl font-bold">Clientes</h1>
           <p className="text-muted-foreground">Gerencie seus clientes</p>
         </div>
-        <Button data-testid="button-add-cliente" onClick={handleNovoCliente}>
-          <Plus className="mr-2 h-4 w-4" />
+        <Button 
+          data-testid="button-add-cliente" 
+          onClick={handleNovoCliente}
+          disabled={loadingRecebedor}
+        >
+          {loadingRecebedor ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Plus className="mr-2 h-4 w-4" />
+          )}
           Novo Cliente
         </Button>
       </div>
+
+      {!loadingRecebedor && !temRecebedorAtivo && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between">
+            <span>
+              Você precisa configurar sua conta bancária antes de cadastrar clientes.
+            </span>
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={() => validarEExecutar(() => {})}
+              data-testid="button-configurar-conta-alert"
+            >
+              <Building2 className="h-4 w-4 mr-2" />
+              Configurar
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>
@@ -173,6 +212,14 @@ export default function Clientes() {
         onClose={() => setModalOpen(false)}
         onSuccess={handleModalSuccess}
         cliente={clienteParaEditar}
+      />
+
+      <ModalConfigContaBancaria
+        open={modalContaAberto}
+        onClose={handleModalContaClose}
+        onSuccess={handleModalContaSuccess}
+        titulo="Configure sua Conta Bancária"
+        descricao="Para cadastrar clientes, você precisa primeiro configurar sua conta bancária para recebimento."
       />
     </div>
   );

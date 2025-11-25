@@ -3,8 +3,10 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import CobrancaTable from "@/components/CobrancaTable";
 import ModalCobranca from "@/components/ModalCobranca";
 import ModalEnviarWhatsApp from "@/components/ModalEnviarWhatsApp";
+import ModalConfigContaBancaria from "@/components/ModalConfigContaBancaria";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
@@ -13,10 +15,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Filter, Loader2, TrendingUp, TrendingDown } from "lucide-react";
+import { Plus, Filter, Loader2, TrendingUp, TrendingDown, AlertTriangle, Building2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useValidarRecebedor } from "@/hooks/useValidarRecebedor";
 import { formatCurrency, formatDate } from "@/lib/masks";
 import { getStatusEfetivo } from "@/lib/cobrancaUtils";
 import type { CobrancaComCliente, StatusCobranca } from "@/types/cobranca";
@@ -31,7 +34,15 @@ export default function Cobrancas() {
   const [modalWhatsAppOpen, setModalWhatsAppOpen] = useState(false);
   const [cobrancaParaWhatsApp, setCobrancaParaWhatsApp] = useState<CobrancaComCliente | null>(null);
 
-  // Calcular range de datas baseado no filtro de período
+  const {
+    temRecebedorAtivo,
+    loadingRecebedor,
+    modalContaAberto,
+    validarEExecutar,
+    handleModalContaSuccess,
+    handleModalContaClose,
+  } = useValidarRecebedor();
+
   const getDateRange = () => {
     const hoje = new Date();
     let dataInicio = new Date();
@@ -59,7 +70,6 @@ export default function Cobrancas() {
     };
   };
 
-  // Query: Listar cobranças
   const { data: cobrancas = [], isLoading } = useQuery<CobrancaComCliente[]>({
     queryKey: ['/api/cobrancas', periodoFilter],
     queryFn: async () => {
@@ -85,7 +95,6 @@ export default function Cobrancas() {
     },
   });
 
-  // Mutation: Marcar como pago
   const marcarPagoMutation = useMutation({
     mutationFn: async (cobranca: CobrancaComCliente) => {
       const { error } = await supabase
@@ -117,7 +126,6 @@ export default function Cobrancas() {
     },
   });
 
-  // Mutation: Cancelar cobrança
   const cancelarMutation = useMutation({
     mutationFn: async (cobranca: CobrancaComCliente) => {
       const { error } = await supabase
@@ -147,7 +155,6 @@ export default function Cobrancas() {
     },
   });
 
-  // Filtrar cobranças localmente
   const cobrancasFiltradas = useMemo(() => {
     return cobrancas.filter((cobranca) => {
       const statusEfetivo = getStatusEfetivo(
@@ -163,7 +170,6 @@ export default function Cobrancas() {
     });
   }, [cobrancas, statusFilter]);
 
-  // Calcular totalizadores
   const totalizadores = useMemo(() => {
     return cobrancasFiltradas.reduce(
       (acc, cobranca) => {
@@ -207,6 +213,12 @@ export default function Cobrancas() {
     );
   }, [cobrancasFiltradas]);
 
+  const handleNovaCobranca = () => {
+    validarEExecutar(() => {
+      setModalNovaCobrancaOpen(true);
+    });
+  };
+
   const handleVerDetalhes = (cobranca: CobrancaComCliente) => {
     setCobrancaSelecionada(cobranca);
     setDetalhesOpen(true);
@@ -230,18 +242,42 @@ export default function Cobrancas() {
         </div>
         <Button
           data-testid="button-add-cobranca"
-          onClick={() => setModalNovaCobrancaOpen(true)}
+          onClick={handleNovaCobranca}
+          disabled={loadingRecebedor}
         >
-          <Plus className="mr-2 h-4 w-4" />
+          {loadingRecebedor ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Plus className="mr-2 h-4 w-4" />
+          )}
           Nova Cobrança
         </Button>
       </div>
 
-      {/* Totalizadores */}
+      {!loadingRecebedor && !temRecebedorAtivo && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between">
+            <span>
+              Você precisa configurar sua conta bancária antes de criar cobranças.
+            </span>
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={() => validarEExecutar(() => {})}
+              data-testid="button-configurar-conta-alert"
+            >
+              <Building2 className="h-4 w-4 mr-2" />
+              Configurar
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center justify-between">
+            <CardTitle className="text-sm font-medium flex items-center justify-between gap-1">
               Total em Aberto
               <TrendingUp className="h-4 w-4 text-warning" />
             </CardTitle>
@@ -258,7 +294,7 @@ export default function Cobrancas() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center justify-between">
+            <CardTitle className="text-sm font-medium flex items-center justify-between gap-1">
               Total Vencido
               <TrendingDown className="h-4 w-4 text-destructive" />
             </CardTitle>
@@ -302,7 +338,6 @@ export default function Cobrancas() {
         </Card>
       </div>
 
-      {/* Filtros */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -339,7 +374,6 @@ export default function Cobrancas() {
         </CardContent>
       </Card>
 
-      {/* Tabela de Cobranças */}
       <Card>
         <CardHeader>
           <CardTitle>
@@ -371,14 +405,12 @@ export default function Cobrancas() {
         </CardContent>
       </Card>
 
-      {/* Modal Nova Cobrança */}
       <ModalCobranca
         open={modalNovaCobrancaOpen}
         onClose={() => setModalNovaCobrancaOpen(false)}
         onSuccess={handleModalSuccess}
       />
 
-      {/* Dialog Detalhes da Cobrança */}
       <Dialog open={detalhesOpen} onOpenChange={setDetalhesOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -459,7 +491,6 @@ export default function Cobrancas() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal Enviar WhatsApp */}
       {cobrancaParaWhatsApp && (
         <ModalEnviarWhatsApp
           open={modalWhatsAppOpen}
@@ -486,6 +517,14 @@ export default function Cobrancas() {
           }}
         />
       )}
+
+      <ModalConfigContaBancaria
+        open={modalContaAberto}
+        onClose={handleModalContaClose}
+        onSuccess={handleModalContaSuccess}
+        titulo="Configure sua Conta Bancária"
+        descricao="Para criar cobranças, você precisa primeiro configurar sua conta bancária para recebimento."
+      />
     </div>
   );
 }
