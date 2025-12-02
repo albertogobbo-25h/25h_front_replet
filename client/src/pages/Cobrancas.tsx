@@ -4,6 +4,7 @@ import CobrancaTable from "@/components/CobrancaTable";
 import ModalCobranca from "@/components/ModalCobranca";
 import ModalEnviarWhatsApp from "@/components/ModalEnviarWhatsApp";
 import ModalConfigContaBancaria from "@/components/ModalConfigContaBancaria";
+import ModalDadosCadastrais from "@/components/ModalDadosCadastrais";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -15,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Filter, Loader2, TrendingUp, TrendingDown, AlertTriangle, Building2 } from "lucide-react";
+import { Plus, Filter, Loader2, TrendingUp, TrendingDown, AlertTriangle, Building2, FileText } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -37,11 +38,19 @@ export default function Cobrancas() {
   const {
     temRecebedorAtivo,
     loadingRecebedor,
+    loadingDados,
+    dadosAssinante,
+    dadosCadastraisCompletos,
     modalContaAberto,
+    modalDadosAberto,
     validarEExecutar,
     handleModalContaSuccess,
     handleModalContaClose,
+    handleModalDadosSuccess,
+    handleModalDadosClose,
   } = useValidarRecebedor();
+
+  const loadingValidacao = loadingRecebedor || loadingDados;
 
   const getDateRange = () => {
     const hoje = new Date();
@@ -243,9 +252,9 @@ export default function Cobrancas() {
         <Button
           data-testid="button-add-cobranca"
           onClick={handleNovaCobranca}
-          disabled={loadingRecebedor}
+          disabled={loadingValidacao}
         >
-          {loadingRecebedor ? (
+          {loadingValidacao ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
             <Plus className="mr-2 h-4 w-4" />
@@ -254,7 +263,27 @@ export default function Cobrancas() {
         </Button>
       </div>
 
-      {!loadingRecebedor && !temRecebedorAtivo && (
+      {!loadingValidacao && !dadosCadastraisCompletos && (
+        <Alert>
+          <FileText className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between">
+            <span>
+              Complete seus dados cadastrais (CNPJ e Nome Fantasia) antes de criar cobranças.
+            </span>
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={() => validarEExecutar(() => {})}
+              data-testid="button-completar-dados-alert"
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Completar Dados
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {!loadingValidacao && dadosCadastraisCompletos && !temRecebedorAtivo && (
         <Alert>
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription className="flex items-center justify-between">
@@ -517,6 +546,13 @@ export default function Cobrancas() {
           }}
         />
       )}
+
+      <ModalDadosCadastrais
+        open={modalDadosAberto}
+        onClose={handleModalDadosClose}
+        onConfirm={handleModalDadosSuccess}
+        dadosAtuais={dadosAssinante}
+      />
 
       <ModalConfigContaBancaria
         open={modalContaAberto}

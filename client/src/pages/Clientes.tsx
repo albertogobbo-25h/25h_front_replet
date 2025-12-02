@@ -2,12 +2,13 @@ import { useState, useMemo } from "react";
 import ClienteTable from "@/components/ClienteTable";
 import ModalCliente from "@/components/ModalCliente";
 import ModalConfigContaBancaria from "@/components/ModalConfigContaBancaria";
+import ModalDadosCadastrais from "@/components/ModalDadosCadastrais";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Loader2, AlertTriangle, Building2 } from "lucide-react";
+import { Plus, Search, Loader2, AlertTriangle, Building2, FileText } from "lucide-react";
 import { useValidarRecebedor } from "@/hooks/useValidarRecebedor";
 import { useListarClientes, useAtivarCliente, useDesativarCliente } from "@/hooks/useClientes";
 import type { Cliente } from "@/types/cliente";
@@ -21,11 +22,19 @@ export default function Clientes() {
   const {
     temRecebedorAtivo,
     loadingRecebedor,
+    loadingDados,
+    dadosAssinante,
+    dadosCadastraisCompletos,
     modalContaAberto,
+    modalDadosAberto,
     validarEExecutar,
     handleModalContaSuccess,
     handleModalContaClose,
+    handleModalDadosSuccess,
+    handleModalDadosClose,
   } = useValidarRecebedor();
+
+  const loadingValidacao = loadingRecebedor || loadingDados;
 
   const indAtivoFilter = useMemo(() => {
     if (statusFilter === "ativo") return true;
@@ -82,9 +91,9 @@ export default function Clientes() {
         <Button 
           data-testid="button-add-cliente" 
           onClick={handleNovoCliente}
-          disabled={loadingRecebedor}
+          disabled={loadingValidacao}
         >
-          {loadingRecebedor ? (
+          {loadingValidacao ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
             <Plus className="mr-2 h-4 w-4" />
@@ -93,7 +102,27 @@ export default function Clientes() {
         </Button>
       </div>
 
-      {!loadingRecebedor && !temRecebedorAtivo && (
+      {!loadingValidacao && !dadosCadastraisCompletos && (
+        <Alert>
+          <FileText className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between">
+            <span>
+              Complete seus dados cadastrais (CNPJ e Nome Fantasia) antes de cadastrar clientes.
+            </span>
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={() => validarEExecutar(() => {})}
+              data-testid="button-completar-dados-alert"
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Completar Dados
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {!loadingValidacao && dadosCadastraisCompletos && !temRecebedorAtivo && (
         <Alert>
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription className="flex items-center justify-between">
@@ -182,6 +211,13 @@ export default function Clientes() {
         onClose={handleModalClose}
         onSuccess={handleModalSuccess}
         cliente={clienteParaEditar}
+      />
+
+      <ModalDadosCadastrais
+        open={modalDadosAberto}
+        onClose={handleModalDadosClose}
+        onConfirm={handleModalDadosSuccess}
+        dadosAtuais={dadosAssinante}
       />
 
       <ModalConfigContaBancaria

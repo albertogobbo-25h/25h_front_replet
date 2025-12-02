@@ -123,19 +123,26 @@ export default function ModalDadosCadastrais({
   const isFormValid = () => {
     return (
       formData.nome.trim() &&
+      formData.nome_fantasia.trim() &&
       formData.cpf_cnpj.trim() &&
       formData.email.trim() &&
       formData.whatsapp.trim()
     );
   };
 
+  const handleDialogOpenChange = (isOpen: boolean) => {
+    if (!isOpen) {
+      onClose();
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent className="max-w-2xl" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Dados Cadastrais</DialogTitle>
           <DialogDescription>
-            Complete seus dados para contratar um plano pago
+            Complete seus dados cadastrais para continuar
           </DialogDescription>
         </DialogHeader>
 
@@ -180,13 +187,14 @@ export default function ModalDadosCadastrais({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="nome-fantasia" data-testid="label-nome-fantasia">Nome Fantasia</Label>
+              <Label htmlFor="nome-fantasia" data-testid="label-nome-fantasia">Nome Fantasia *</Label>
               <Input
                 id="nome-fantasia"
                 value={formData.nome_fantasia}
                 onChange={(e) => handleFieldChange('nome_fantasia', e.target.value)}
                 placeholder="Nome comercial da empresa"
                 data-testid="input-nome-fantasia"
+                required
               />
             </div>
 
