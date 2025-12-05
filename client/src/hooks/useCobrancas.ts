@@ -67,7 +67,14 @@ export function useCriarCobrancaExtra() {
   return useMutation<CriarCobrancaExtraResponse, ApiError, CriarCobrancaExtraParams>({
     mutationFn: async (params) => {
       return await callSupabase<CriarCobrancaExtraResponse>(async () =>
-        await supabase.rpc('criar_cobranca_extra', params)
+        await supabase.rpc('criar_cobranca_extra', {
+          p_cliente_id: params.p_cliente_id,
+          p_cliente_assinatura_id: params.p_cliente_assinatura_id || null,
+          p_descricao: params.p_descricao,
+          p_valor_total: params.p_valor_total,
+          p_data_vencimento: params.p_data_vencimento,
+          p_observacao: params.p_observacao || null,
+        })
       );
     },
     onSuccess: (data) => {
