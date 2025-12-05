@@ -145,6 +145,7 @@ export function useMarcarCobrancaPago() {
 }
 
 export function useGerarLinkPagamento() {
+  const queryClient = useQueryClient();
   const { toast } = useToast();
 
   return useMutation<GerarLinkPagamentoResponse, ApiError, string>({
@@ -155,14 +156,8 @@ export function useGerarLinkPagamento() {
         })
       );
     },
-    onSuccess: (data) => {
-      if (data.link_pagamento) {
-        navigator.clipboard.writeText(data.link_pagamento);
-        toast({
-          title: 'Link copiado',
-          description: 'O link de pagamento foi copiado para a área de transferência',
-        });
-      }
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cobrancas'] });
     },
     onError: (error) => {
       toast({

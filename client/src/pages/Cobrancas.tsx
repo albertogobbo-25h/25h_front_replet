@@ -184,7 +184,17 @@ export default function Cobrancas() {
         description: 'O link de pagamento foi copiado para a área de transferência',
       });
     } else {
-      gerarLinkMutation.mutate(cobranca.id);
+      gerarLinkMutation.mutate(cobranca.id, {
+        onSuccess: async (data) => {
+          if (data.link_pagamento) {
+            await navigator.clipboard.writeText(data.link_pagamento);
+            toast({
+              title: 'Link gerado e copiado',
+              description: 'O link de pagamento foi gerado e copiado para a área de transferência',
+            });
+          }
+        },
+      });
     }
   };
 
