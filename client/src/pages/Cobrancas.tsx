@@ -1,5 +1,4 @@
 import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import CobrancaTable from "@/components/CobrancaTable";
 import ModalCobranca from "@/components/ModalCobranca";
 import ModalEnviarWhatsApp from "@/components/ModalEnviarWhatsApp";
@@ -16,24 +15,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Filter, Loader2, TrendingUp, TrendingDown, AlertTriangle, Building2, FileText } from "lucide-react";
-import { supabase } from "@/lib/supabase";
-import { queryClient } from "@/lib/queryClient";
+import { Plus, Filter, Loader2, TrendingUp, TrendingDown, AlertTriangle, Building2, FileText, Link2, Copy } from "lucide-react";
+import { useCobrancas, useCancelarCobranca, useMarcarCobrancaPago, useGerarLinkPagamento } from "@/hooks/useCobrancas";
 import { useToast } from "@/hooks/use-toast";
 import { useValidarRecebedor } from "@/hooks/useValidarRecebedor";
 import { formatCurrency, formatDate } from "@/lib/masks";
 import { getStatusEfetivo } from "@/lib/cobrancaUtils";
-import type { CobrancaComCliente, StatusCobranca } from "@/types/cobranca";
+import type { Cobranca, StatusCobranca } from "@/types/cobranca";
 
 export default function Cobrancas() {
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>("todos");
   const [periodoFilter, setPeriodoFilter] = useState<string>("mes_atual");
   const [modalNovaCobrancaOpen, setModalNovaCobrancaOpen] = useState(false);
-  const [cobrancaSelecionada, setCobrancaSelecionada] = useState<CobrancaComCliente | null>(null);
+  const [cobrancaSelecionada, setCobrancaSelecionada] = useState<Cobranca | null>(null);
   const [detalhesOpen, setDetalhesOpen] = useState(false);
   const [modalWhatsAppOpen, setModalWhatsAppOpen] = useState(false);
-  const [cobrancaParaWhatsApp, setCobrancaParaWhatsApp] = useState<CobrancaComCliente | null>(null);
+  const [cobrancaParaWhatsApp, setCobrancaParaWhatsApp] = useState<Cobranca | null>(null);
 
   const {
     temRecebedorAtivo,
@@ -79,90 +77,17 @@ export default function Cobrancas() {
     };
   };
 
-  const { data: cobrancas = [], isLoading } = useQuery<CobrancaComCliente[]>({
-    queryKey: ['/api/cobrancas', periodoFilter],
-    queryFn: async () => {
-      const { dataInicio } = getDateRange();
+  const { dataInicio, dataFim } = getDateRange();
 
-      const { data, error } = await supabase
-        .schema('app_data')
-        .from('cliente_cobranca')
-        .select(`
-          *,
-          cliente:cliente_id (
-            id,
-            nome,
-            nome_visualizacao,
-            whatsapp
-          )
-        `)
-        .gte('data_vencimento', dataInicio)
-        .order('data_vencimento', { ascending: false });
-
-      if (error) throw error;
-      return (data || []) as CobrancaComCliente[];
-    },
+  const { cobrancas, isLoading, refetch } = useCobrancas({
+    p_data_vencimento_inicio: dataInicio,
+    p_data_vencimento_fim: dataFim,
+    p_limit: 500,
   });
 
-  const marcarPagoMutation = useMutation({
-    mutationFn: async (cobranca: CobrancaComCliente) => {
-      const { error } = await supabase
-        .schema('app_data')
-        .from('cliente_cobranca')
-        .update({
-          status_pagamento: 'PAGO',
-          dthr_pagamento: new Date().toISOString(),
-          meio_pagamento: 'MANUAL',
-          modificado_em: new Date().toISOString(),
-        })
-        .eq('id', cobranca.id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/cobrancas'] });
-      toast({
-        title: 'Cobrança marcada como paga',
-        description: 'A cobrança foi atualizada com sucesso',
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Erro ao marcar como pago',
-        description: error.message,
-        variant: 'destructive',
-      });
-    },
-  });
-
-  const cancelarMutation = useMutation({
-    mutationFn: async (cobranca: CobrancaComCliente) => {
-      const { error } = await supabase
-        .schema('app_data')
-        .from('cliente_cobranca')
-        .update({
-          status_pagamento: 'CANCELADO',
-          modificado_em: new Date().toISOString(),
-        })
-        .eq('id', cobranca.id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/cobrancas'] });
-      toast({
-        title: 'Cobrança cancelada',
-        description: 'A cobrança foi cancelada com sucesso',
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Erro ao cancelar cobrança',
-        description: error.message,
-        variant: 'destructive',
-      });
-    },
-  });
+  const cancelarMutation = useCancelarCobranca();
+  const marcarPagoMutation = useMarcarCobrancaPago();
+  const gerarLinkMutation = useGerarLinkPagamento();
 
   const cobrancasFiltradas = useMemo(() => {
     return cobrancas.filter((cobranca) => {
@@ -228,18 +153,43 @@ export default function Cobrancas() {
     });
   };
 
-  const handleVerDetalhes = (cobranca: CobrancaComCliente) => {
+  const handleVerDetalhes = (cobranca: Cobranca) => {
     setCobrancaSelecionada(cobranca);
     setDetalhesOpen(true);
   };
 
-  const handleEnviarWhatsApp = (cobranca: CobrancaComCliente) => {
+  const handleEnviarWhatsApp = (cobranca: Cobranca) => {
     setCobrancaParaWhatsApp(cobranca);
     setModalWhatsAppOpen(true);
   };
 
+  const handleMarcarPago = (cobranca: Cobranca) => {
+    marcarPagoMutation.mutate({
+      p_cobranca_id: cobranca.id,
+      p_meio_pagamento: 'MANUAL',
+    });
+  };
+
+  const handleCancelar = (cobranca: Cobranca) => {
+    cancelarMutation.mutate({
+      cobrancaId: cobranca.id,
+    });
+  };
+
+  const handleCopiarLink = async (cobranca: Cobranca) => {
+    if (cobranca.link_pagamento) {
+      await navigator.clipboard.writeText(cobranca.link_pagamento);
+      toast({
+        title: 'Link copiado',
+        description: 'O link de pagamento foi copiado para a área de transferência',
+      });
+    } else {
+      gerarLinkMutation.mutate(cobranca.id);
+    }
+  };
+
   const handleModalSuccess = () => {
-    queryClient.invalidateQueries({ queryKey: ['/api/cobrancas'] });
+    refetch();
   };
 
   return (
@@ -427,8 +377,9 @@ export default function Cobrancas() {
               cobrancas={cobrancasFiltradas}
               onView={handleVerDetalhes}
               onEnviarWhatsApp={handleEnviarWhatsApp}
-              onMarcarPago={(cobranca) => marcarPagoMutation.mutate(cobranca)}
-              onCancelar={(cobranca) => cancelarMutation.mutate(cobranca)}
+              onMarcarPago={handleMarcarPago}
+              onCancelar={handleCancelar}
+              onCopiarLink={handleCopiarLink}
             />
           )}
         </CardContent>
@@ -504,14 +455,53 @@ export default function Cobrancas() {
                 </div>
               )}
 
-              {cobrancaSelecionada.referencia_mes && (
+              {cobrancaSelecionada.meio_pagamento && (
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Mês de Referência</p>
+                  <p className="text-sm font-medium text-muted-foreground">Meio de Pagamento</p>
                   <p className="text-base">
-                    {new Date(cobrancaSelecionada.referencia_mes).toLocaleDateString('pt-BR', {
-                      month: 'long',
-                      year: 'numeric',
-                    })}
+                    {cobrancaSelecionada.meio_pagamento === 'MANUAL' && 'Pagamento Manual'}
+                    {cobrancaSelecionada.meio_pagamento === 'OPF_PIX_IMEDIATO' && 'PIX Imediato'}
+                    {cobrancaSelecionada.meio_pagamento === 'OPF_PIX_AUTOMATICO' && 'PIX Automático'}
+                  </p>
+                </div>
+              )}
+
+              {cobrancaSelecionada.link_pagamento && (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Link de Pagamento</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <code className="text-xs bg-muted px-2 py-1 rounded flex-1 truncate">
+                      {cobrancaSelecionada.link_pagamento}
+                    </code>
+                    <Button 
+                      size="icon" 
+                      variant="ghost"
+                      onClick={() => {
+                        navigator.clipboard.writeText(cobrancaSelecionada.link_pagamento!);
+                        toast({
+                          title: 'Link copiado',
+                          description: 'O link foi copiado para a área de transferência',
+                        });
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {cobrancaSelecionada.observacao && (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Observação</p>
+                  <p className="text-base">{cobrancaSelecionada.observacao}</p>
+                </div>
+              )}
+
+              {cobrancaSelecionada.assinatura && (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Assinatura</p>
+                  <p className="text-base">
+                    {cobrancaSelecionada.plano?.nome || 'Assinatura'} - {cobrancaSelecionada.assinatura.status}
                   </p>
                 </div>
               )}
@@ -537,12 +527,7 @@ export default function Cobrancas() {
             descricao: cobrancaParaWhatsApp.descricao,
             valor: formatCurrency(Number(cobrancaParaWhatsApp.valor_total)),
             vencimento: formatDate(cobrancaParaWhatsApp.data_vencimento),
-            referencia_mes: cobrancaParaWhatsApp.referencia_mes
-              ? new Date(cobrancaParaWhatsApp.referencia_mes).toLocaleDateString('pt-BR', {
-                  month: 'long',
-                  year: 'numeric',
-                })
-              : undefined,
+            link_pagamento: cobrancaParaWhatsApp.link_pagamento || undefined,
           }}
         />
       )}

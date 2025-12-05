@@ -19,17 +19,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Eye, Send, MoreVertical, CheckCircle, XCircle } from "lucide-react";
+import { Eye, Send, MoreVertical, CheckCircle, XCircle, Link2 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/masks";
 import { getStatusEfetivo, getStatusLabel, getStatusVariant, getDiasAteVencimento } from "@/lib/cobrancaUtils";
-import type { CobrancaComCliente } from "@/types/cobranca";
+import type { Cobranca } from "@/types/cobranca";
 
 interface CobrancaTableProps {
-  cobrancas: CobrancaComCliente[];
-  onView?: (cobranca: CobrancaComCliente) => void;
-  onEnviarWhatsApp?: (cobranca: CobrancaComCliente) => void;
-  onMarcarPago?: (cobranca: CobrancaComCliente) => void;
-  onCancelar?: (cobranca: CobrancaComCliente) => void;
+  cobrancas: Cobranca[];
+  onView?: (cobranca: Cobranca) => void;
+  onEnviarWhatsApp?: (cobranca: Cobranca) => void;
+  onMarcarPago?: (cobranca: Cobranca) => void;
+  onCancelar?: (cobranca: Cobranca) => void;
+  onCopiarLink?: (cobranca: Cobranca) => void;
 }
 
 export default function CobrancaTable({
@@ -38,9 +39,10 @@ export default function CobrancaTable({
   onEnviarWhatsApp,
   onMarcarPago,
   onCancelar,
+  onCopiarLink,
 }: CobrancaTableProps) {
   const [cobrancaParaAcao, setCobrancaParaAcao] = useState<{
-    cobranca: CobrancaComCliente;
+    cobranca: Cobranca;
     acao: 'marcar_pago' | 'cancelar' | null;
   } | null>(null);
 
@@ -90,7 +92,7 @@ export default function CobrancaTable({
                     <TableCell>
                       <div>
                         <p className="font-medium">
-                          {cobranca.cliente?.nome_visualizacao || cobranca.cliente?.nome}
+                          {cobranca.cliente?.nome_visualizacao || cobranca.cliente?.nome || 'Cliente'}
                         </p>
                       </div>
                     </TableCell>
@@ -159,6 +161,18 @@ export default function CobrancaTable({
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
+                                {onCopiarLink && (
+                                  <>
+                                    <DropdownMenuItem
+                                      onClick={() => onCopiarLink(cobranca)}
+                                      data-testid={`menu-copiar-link-${cobranca.id}`}
+                                    >
+                                      <Link2 className="mr-2 h-4 w-4" />
+                                      {cobranca.link_pagamento ? 'Copiar Link' : 'Gerar Link'}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                  </>
+                                )}
                                 <DropdownMenuItem
                                   onClick={() => setCobrancaParaAcao({ cobranca, acao: 'marcar_pago' })}
                                   data-testid={`menu-marcar-pago-${cobranca.id}`}
@@ -189,7 +203,6 @@ export default function CobrancaTable({
         </Table>
       </div>
 
-      {/* Dialog de Confirmação */}
       <AlertDialog
         open={!!cobrancaParaAcao}
         onOpenChange={(open) => !open && setCobrancaParaAcao(null)}
@@ -205,7 +218,7 @@ export default function CobrancaTable({
                   Tem certeza que deseja marcar esta cobrança como paga?
                   <br />
                   <span className="font-medium">
-                    Cliente: {cobrancaParaAcao.cobranca.cliente?.nome}
+                    Cliente: {cobrancaParaAcao.cobranca.cliente?.nome || 'Cliente'}
                   </span>
                   <br />
                   <span className="font-medium">
@@ -217,7 +230,7 @@ export default function CobrancaTable({
                   Tem certeza que deseja cancelar esta cobrança? Esta ação não pode ser desfeita.
                   <br />
                   <span className="font-medium">
-                    Cliente: {cobrancaParaAcao?.cobranca.cliente?.nome}
+                    Cliente: {cobrancaParaAcao?.cobranca.cliente?.nome || 'Cliente'}
                   </span>
                   <br />
                   <span className="font-medium">
