@@ -30,6 +30,11 @@ interface ClienteSelect {
   nome_visualizacao: string | null;
 }
 
+interface ListarClientesResponse {
+  clientes: ClienteSelect[];
+  total: number;
+}
+
 interface ClienteAssinatura {
   id: string;
   status: string;
@@ -60,21 +65,21 @@ export default function ModalCobranca({
     observacao: '',
   });
 
-  const { data: clientes = [] } = useQuery<ClienteSelect[]>({
+  const { data: clientesData } = useQuery<ListarClientesResponse>({
     queryKey: ['/api/clientes-ativos'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .schema('app_data')
-        .from('cliente')
-        .select('id, nome, nome_visualizacao')
-        .eq('ind_ativo', true)
-        .order('nome', { ascending: true });
-
-      if (error) throw error;
-      return data as ClienteSelect[];
+      return await callSupabase<ListarClientesResponse>(async () =>
+        await supabase.rpc('listar_clientes', {
+          p_ind_ativo: true,
+          p_limit: 500,
+          p_offset: 0,
+        })
+      );
     },
     enabled: open,
   });
+
+  const clientes = clientesData?.clientes || [];
 
   const { data: assinaturas = [] } = useQuery<ClienteAssinatura[]>({
     queryKey: ['/api/cliente-assinaturas', formData.cliente_id],
