@@ -19,10 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
 import { Loader2 } from "lucide-react";
-import type { CobrancaComCliente } from "@/types/cobranca";
+import { supabase } from "@/lib/supabase";
+import { callSupabase } from "@/lib/api-helper";
+import { useCriarCobrancaExtra } from "@/hooks/useCobrancas";
 
 interface ClienteSelect {
   id: string;
@@ -30,32 +30,36 @@ interface ClienteSelect {
   nome_visualizacao: string | null;
 }
 
+interface ClienteAssinatura {
+  id: string;
+  status: string;
+  plano: {
+    nome: string;
+    valor_mensal: number;
+  };
+}
+
 interface ModalCobrancaProps {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  cobranca?: CobrancaComCliente | null;
 }
 
 export default function ModalCobranca({
   open,
   onClose,
   onSuccess,
-  cobranca,
 }: ModalCobrancaProps) {
-  const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
+  const criarCobrancaMutation = useCriarCobrancaExtra();
   const [formData, setFormData] = useState({
     cliente_id: '',
+    cliente_assinatura_id: '',
     descricao: '',
     valor_total: '',
     data_vencimento: '',
-    referencia_mes: '',
+    observacao: '',
   });
 
-  const isEdit = !!cobranca;
-
-  // Query: Listar clientes ativos para o select
   const { data: clientes = [] } = useQuery<ClienteSelect[]>({
     queryKey: ['/api/clientes-ativos'],
     queryFn: async () => {
@@ -69,130 +73,133 @@ export default function ModalCobranca({
       if (error) throw error;
       return data as ClienteSelect[];
     },
-    enabled: open && !isEdit,
+    enabled: open,
+  });
+
+  const { data: assinaturas = [] } = useQuery<ClienteAssinatura[]>({
+    queryKey: ['/api/cliente-assinaturas', formData.cliente_id],
+    queryFn: async () => {
+      if (!formData.cliente_id) return [];
+      
+      const result = await callSupabase<{ assinaturas: ClienteAssinatura[] }>(async () =>
+        await supabase.rpc('listar_assinaturas_cliente', {
+          p_cliente_id: formData.cliente_id,
+          p_status: 'ATIVA',
+          p_limit: 50,
+          p_offset: 0,
+        })
+      );
+      
+      return result.assinaturas || [];
+    },
+    enabled: open && !!formData.cliente_id,
   });
 
   useEffect(() => {
-    if (open && cobranca) {
-      setFormData({
-        cliente_id: cobranca.cliente_id,
-        descricao: cobranca.descricao || '',
-        valor_total: cobranca.valor_total.toString(),
-        data_vencimento: cobranca.data_vencimento || '',
-        referencia_mes: cobranca.referencia_mes || '',
-      });
-    } else if (open && !cobranca) {
-      // Data de vencimento padrão: 10 dias a partir de hoje
+    if (open) {
       const defaultVencimento = new Date();
       defaultVencimento.setDate(defaultVencimento.getDate() + 10);
       
       setFormData({
         cliente_id: '',
+        cliente_assinatura_id: '',
         descricao: '',
         valor_total: '',
         data_vencimento: defaultVencimento.toISOString().split('T')[0],
-        referencia_mes: '',
+        observacao: '',
       });
     }
-  }, [open, cobranca]);
+  }, [open]);
+
+  useEffect(() => {
+    if (formData.cliente_id) {
+      setFormData(prev => ({ ...prev, cliente_assinatura_id: '' }));
+    }
+  }, [formData.cliente_id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-
+    
     try {
-      if (isEdit && cobranca) {
-        // Atualizar cobrança existente
-        const { error } = await supabase
-          .schema('app_data')
-          .from('cliente_cobranca')
-          .update({
-            descricao: formData.descricao,
-            valor_total: parseFloat(formData.valor_total),
-            data_vencimento: formData.data_vencimento,
-            referencia_mes: formData.referencia_mes || null,
-            modificado_em: new Date().toISOString(),
-          })
-          .eq('id', cobranca.id);
-
-        if (error) throw error;
-
-        toast({
-          title: 'Cobrança atualizada',
-          description: 'A cobrança foi atualizada com sucesso',
-        });
-      } else {
-        // Criar nova cobrança
-        const { error } = await supabase
-          .schema('app_data')
-          .from('cliente_cobranca')
-          .insert({
-            cliente_id: formData.cliente_id,
-            descricao: formData.descricao,
-            valor_total: parseFloat(formData.valor_total),
-            data_vencimento: formData.data_vencimento,
-            referencia_mes: formData.referencia_mes || null,
-            data_emissao: new Date().toISOString().split('T')[0],
-            status_pagamento: 'EM_ABERTO',
-          });
-
-        if (error) throw error;
-
-        toast({
-          title: 'Cobrança criada',
-          description: 'A cobrança foi criada com sucesso',
-        });
-      }
+      await criarCobrancaMutation.mutateAsync({
+        p_cliente_id: formData.cliente_id,
+        p_cliente_assinatura_id: formData.cliente_assinatura_id || undefined,
+        p_descricao: formData.descricao,
+        p_valor_total: parseFloat(formData.valor_total),
+        p_data_vencimento: formData.data_vencimento,
+        p_observacao: formData.observacao || undefined,
+      });
 
       onSuccess();
       onClose();
-    } catch (error: any) {
-      toast({
-        title: 'Erro ao salvar cobrança',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
+    } catch (error) {
     }
+  };
+
+  const isFormValid = () => {
+    return (
+      formData.cliente_id.trim() &&
+      formData.descricao.trim() &&
+      formData.valor_total.trim() &&
+      parseFloat(formData.valor_total) > 0 &&
+      formData.data_vencimento.trim()
+    );
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            {isEdit ? 'Editar Cobrança' : 'Nova Cobrança'}
-          </DialogTitle>
+          <DialogTitle>Nova Cobrança</DialogTitle>
           <DialogDescription>
-            {isEdit
-              ? 'Atualize as informações da cobrança'
-              : 'Crie uma nova cobrança avulsa para um cliente'}
+            Crie uma nova cobrança avulsa para um cliente
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 py-4">
-            {/* Cliente (apenas ao criar) */}
-            {!isEdit && (
+            <div className="space-y-2">
+              <Label htmlFor="cliente_id">
+                Cliente <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={formData.cliente_id}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, cliente_id: value })
+                }
+              >
+                <SelectTrigger id="cliente_id" data-testid="select-cliente">
+                  <SelectValue placeholder="Selecione um cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clientes.map((cliente) => (
+                    <SelectItem key={cliente.id} value={cliente.id}>
+                      {cliente.nome_visualizacao || cliente.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {formData.cliente_id && assinaturas.length > 0 && (
               <div className="space-y-2">
-                <Label htmlFor="cliente_id">
-                  Cliente <span className="text-destructive">*</span>
+                <Label htmlFor="cliente_assinatura_id">
+                  Vincular a Assinatura (opcional)
                 </Label>
                 <Select
-                  value={formData.cliente_id}
+                  value={formData.cliente_assinatura_id}
                   onValueChange={(value) =>
-                    setFormData({ ...formData, cliente_id: value })
+                    setFormData({ ...formData, cliente_assinatura_id: value })
                   }
-                  required
                 >
-                  <SelectTrigger id="cliente_id" data-testid="select-cliente">
-                    <SelectValue placeholder="Selecione um cliente" />
+                  <SelectTrigger id="cliente_assinatura_id" data-testid="select-assinatura">
+                    <SelectValue placeholder="Nenhuma (cobrança avulsa)" />
                   </SelectTrigger>
                   <SelectContent>
-                    {clientes.map((cliente) => (
-                      <SelectItem key={cliente.id} value={cliente.id}>
-                        {cliente.nome_visualizacao || cliente.nome}
+                    <SelectItem value="">Nenhuma (cobrança avulsa)</SelectItem>
+                    {assinaturas.map((assinatura) => (
+                      <SelectItem key={assinatura.id} value={assinatura.id}>
+                        {assinatura.plano?.nome || 'Assinatura'} - R$ {assinatura.plano?.valor_mensal?.toFixed(2) || '0.00'}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -200,7 +207,6 @@ export default function ModalCobranca({
               </div>
             )}
 
-            {/* Descrição */}
             <div className="space-y-2">
               <Label htmlFor="descricao">
                 Descrição <span className="text-destructive">*</span>
@@ -218,7 +224,6 @@ export default function ModalCobranca({
               />
             </div>
 
-            {/* Valor */}
             <div className="space-y-2">
               <Label htmlFor="valor_total">
                 Valor (R$) <span className="text-destructive">*</span>
@@ -238,7 +243,6 @@ export default function ModalCobranca({
               />
             </div>
 
-            {/* Data de Vencimento */}
             <div className="space-y-2">
               <Label htmlFor="data_vencimento">
                 Data de Vencimento <span className="text-destructive">*</span>
@@ -255,18 +259,17 @@ export default function ModalCobranca({
               />
             </div>
 
-            {/* Referência do Mês (opcional) */}
             <div className="space-y-2">
-              <Label htmlFor="referencia_mes">Referência do Mês (opcional)</Label>
-              <Input
-                id="referencia_mes"
-                type="month"
-                value={formData.referencia_mes}
+              <Label htmlFor="observacao">Observação (opcional)</Label>
+              <Textarea
+                id="observacao"
+                value={formData.observacao}
                 onChange={(e) =>
-                  setFormData({ ...formData, referencia_mes: e.target.value })
+                  setFormData({ ...formData, observacao: e.target.value })
                 }
-                placeholder="YYYY-MM"
-                data-testid="input-referencia-mes"
+                placeholder="Informações adicionais sobre esta cobrança"
+                rows={2}
+                data-testid="textarea-observacao"
               />
             </div>
           </div>
@@ -276,19 +279,23 @@ export default function ModalCobranca({
               type="button"
               variant="outline"
               onClick={onClose}
-              disabled={loading}
+              disabled={criarCobrancaMutation.isPending}
               data-testid="button-cancelar"
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading} data-testid="button-salvar-cobranca">
-              {loading ? (
+            <Button 
+              type="submit" 
+              disabled={criarCobrancaMutation.isPending || !isFormValid()} 
+              data-testid="button-salvar-cobranca"
+            >
+              {criarCobrancaMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Salvando...
+                  Criando...
                 </>
               ) : (
-                'Salvar'
+                'Criar Cobrança'
               )}
             </Button>
           </DialogFooter>
