@@ -33,6 +33,8 @@ export function useCobrancas(params?: ListarCobrancasParams) {
         })
       );
     },
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   return {
