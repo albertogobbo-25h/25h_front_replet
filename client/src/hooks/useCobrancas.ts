@@ -30,18 +30,24 @@ export function useCobrancas(params?: ListarCobrancasParams) {
 
       if (error) throw error;
       
+      console.log('[useCobrancas] Raw RPC response:', JSON.stringify(data));
+      
       // RPC retorna {status, message, data: {cobrancas: [...], total, limit, offset}}
       if (data?.data?.cobrancas && Array.isArray(data.data.cobrancas)) {
+        console.log('[useCobrancas] Found cobrancas in data.data.cobrancas:', data.data.cobrancas.length);
         return data.data.cobrancas as Cobranca[];
       }
       // Fallback: resposta direta como array
       if (Array.isArray(data)) {
+        console.log('[useCobrancas] Data is direct array:', data.length);
         return data as Cobranca[];
       }
       // Fallback: objeto com cobrancas na raiz
       if (data?.cobrancas && Array.isArray(data.cobrancas)) {
+        console.log('[useCobrancas] Found cobrancas in data.cobrancas:', data.cobrancas.length);
         return data.cobrancas as Cobranca[];
       }
+      console.log('[useCobrancas] No cobrancas found, returning empty array');
       return [] as Cobranca[];
     },
     staleTime: 0,
