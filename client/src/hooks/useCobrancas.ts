@@ -78,7 +78,10 @@ export function useCriarCobrancaExtra() {
       );
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/cobrancas'] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && query.queryKey[0] === '/api/cobrancas',
+      });
       toast({
         title: 'Cobrança criada',
         description: 'A cobrança foi criada com sucesso',
@@ -108,7 +111,10 @@ export function useCancelarCobranca() {
       );
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/cobrancas'] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && query.queryKey[0] === '/api/cobrancas',
+      });
       toast({
         title: 'Cobrança cancelada',
         description: 'A cobrança foi cancelada com sucesso',
@@ -135,7 +141,10 @@ export function useMarcarCobrancaPago() {
       );
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/cobrancas'] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && query.queryKey[0] === '/api/cobrancas',
+      });
       toast({
         title: 'Cobrança marcada como paga',
         description: 'A cobrança foi atualizada com sucesso',
@@ -164,7 +173,10 @@ export function useGerarLinkPagamento() {
       );
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/cobrancas'] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && query.queryKey[0] === '/api/cobrancas',
+      });
     },
     onError: (error) => {
       toast({
