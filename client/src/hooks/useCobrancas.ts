@@ -18,28 +18,37 @@ import type {
 export function useCobrancas(params?: ListarCobrancasParams) {
   const queryKey = ['/api/cobrancas', params];
 
-  const query = useQuery<ListarCobrancasResponse>({
+  const query = useQuery<Cobranca[]>({
     queryKey,
     queryFn: async () => {
-      return await callSupabase<ListarCobrancasResponse>(async () =>
-        await supabase.rpc('listar_cobrancas_cliente', {
-          p_cliente_id: params?.p_cliente_id || null,
-          p_cliente_assinatura_id: params?.p_cliente_assinatura_id || null,
-          p_status_pagamento: params?.p_status_pagamento || null,
-          p_data_vencimento_inicio: params?.p_data_vencimento_inicio || null,
-          p_data_vencimento_fim: params?.p_data_vencimento_fim || null,
-          p_limit: params?.p_limit || 100,
-          p_offset: params?.p_offset || 0,
-        })
-      );
+      const { data, error } = await supabase.rpc('listar_cobrancas_cliente', {
+        p_cliente_id: params?.p_cliente_id || null,
+        p_cliente_assinatura_id: params?.p_cliente_assinatura_id || null,
+        p_status_pagamento: params?.p_status_pagamento || null,
+        p_data_vencimento_inicio: params?.p_data_vencimento_inicio || null,
+        p_data_vencimento_fim: params?.p_data_vencimento_fim || null,
+        p_limit: params?.p_limit || 100,
+        p_offset: params?.p_offset || 0,
+      });
+
+      if (error) throw error;
+      
+      // RPC pode retornar array direto ou objeto com cobrancas
+      if (Array.isArray(data)) {
+        return data;
+      }
+      if (data?.cobrancas && Array.isArray(data.cobrancas)) {
+        return data.cobrancas;
+      }
+      return [];
     },
     staleTime: 0,
     refetchOnMount: 'always',
   });
 
   return {
-    cobrancas: query.data?.cobrancas || [],
-    total: query.data?.total || 0,
+    cobrancas: query.data || [],
+    total: query.data?.length || 0,
     isLoading: query.isLoading,
     isError: query.isError,
     error: query.error,
