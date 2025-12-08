@@ -33,14 +33,19 @@ export function useCobrancas(params?: ListarCobrancasParams) {
 
       if (error) throw error;
       
-      // RPC pode retornar array direto ou objeto com cobrancas
+      // RPC retorna {status, message, data: {cobrancas: [...], total, limit, offset}}
+      if (data?.data?.cobrancas && Array.isArray(data.data.cobrancas)) {
+        return data.data.cobrancas as Cobranca[];
+      }
+      // Fallback: resposta direta como array
       if (Array.isArray(data)) {
-        return data;
+        return data as Cobranca[];
       }
+      // Fallback: objeto com cobrancas na raiz
       if (data?.cobrancas && Array.isArray(data.cobrancas)) {
-        return data.cobrancas;
+        return data.cobrancas as Cobranca[];
       }
-      return [];
+      return [] as Cobranca[];
     },
     staleTime: 0,
     refetchOnMount: 'always',
