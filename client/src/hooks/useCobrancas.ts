@@ -1,22 +1,19 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { callSupabase, ApiError } from '@/lib/api-helper';
+import { queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import type {
   Cobranca,
   ListarCobrancasParams,
-  ListarCobrancasResponse,
   CriarCobrancaExtraParams,
-  CriarCobrancaExtraResponse,
-  CancelarCobrancaResponse,
   MarcarPagoParams,
-  MarcarPagoResponse,
-  GerarLinkPagamentoResponse,
   MeioPagamento,
 } from '@/types/cobranca';
 
+const COBRANCAS_QUERY_KEY = '/api/cobrancas';
+
 export function useCobrancas(params?: ListarCobrancasParams) {
-  const queryKey = ['/api/cobrancas', params];
+  const queryKey = [COBRANCAS_QUERY_KEY, params];
 
   const query = useQuery<Cobranca[]>({
     queryKey,
@@ -63,50 +60,67 @@ export function useCobrancas(params?: ListarCobrancasParams) {
 
 export function useObterCobranca(cobrancaId: string | null) {
   return useQuery<Cobranca | null>({
-    queryKey: ['/api/cobrancas', cobrancaId],
+    queryKey: [COBRANCAS_QUERY_KEY, cobrancaId],
     queryFn: async () => {
       if (!cobrancaId) return null;
-      return await callSupabase<Cobranca>(async () =>
-        await supabase.rpc('obter_cobranca', {
-          p_cobranca_id: cobrancaId,
-        })
-      );
+      
+      const { data, error } = await supabase.rpc('obter_cobranca', {
+        p_cobranca_id: cobrancaId,
+      });
+
+      if (error) throw error;
+      
+      // RPC retorna {status, message, data: {...}}
+      if (data?.data) {
+        return data.data as Cobranca;
+      }
+      return data as Cobranca;
     },
     enabled: !!cobrancaId,
   });
 }
 
+interface RpcResponse {
+  status: string;
+  message: string;
+  code?: string;
+  data?: any;
+}
+
 export function useCriarCobrancaExtra() {
-  const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  return useMutation<CriarCobrancaExtraResponse, ApiError, CriarCobrancaExtraParams>({
-    mutationFn: async (params) => {
-      return await callSupabase<CriarCobrancaExtraResponse>(async () =>
-        await supabase.rpc('criar_cobranca_extra', {
-          p_cliente_id: params.p_cliente_id,
-          p_cliente_assinatura_id: params.p_cliente_assinatura_id || null,
-          p_descricao: params.p_descricao,
-          p_valor_total: params.p_valor_total,
-          p_data_vencimento: params.p_data_vencimento,
-          p_observacao: params.p_observacao || null,
-        })
-      );
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && query.queryKey[0] === '/api/cobrancas',
+  return useMutation({
+    mutationFn: async (params: CriarCobrancaExtraParams) => {
+      const { data, error } = await supabase.rpc('criar_cobranca_extra', {
+        p_cliente_id: params.p_cliente_id,
+        p_cliente_assinatura_id: params.p_cliente_assinatura_id || null,
+        p_descricao: params.p_descricao,
+        p_valor_total: params.p_valor_total,
+        p_data_vencimento: params.p_data_vencimento,
+        p_observacao: params.p_observacao || null,
       });
+
+      if (error) throw error;
+
+      const response = data as RpcResponse;
+      if (response.status === 'ERROR') {
+        throw { code: response.code, message: response.message };
+      }
+
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [COBRANCAS_QUERY_KEY] });
       toast({
         title: 'Cobrança criada',
         description: 'A cobrança foi criada com sucesso',
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: 'Erro ao criar cobrança',
-        description: error.message,
+        description: error.message || 'Erro desconhecido',
         variant: 'destructive',
       });
     },
@@ -114,32 +128,35 @@ export function useCriarCobrancaExtra() {
 }
 
 export function useCancelarCobranca() {
-  const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  return useMutation<CancelarCobrancaResponse, ApiError, { cobrancaId: string; observacao?: string }>({
-    mutationFn: async ({ cobrancaId, observacao }) => {
-      return await callSupabase<CancelarCobrancaResponse>(async () =>
-        await supabase.rpc('cancelar_cobranca', {
-          p_cobranca_id: cobrancaId,
-          p_observacao: observacao || null,
-        })
-      );
+  return useMutation({
+    mutationFn: async ({ cobrancaId, observacao }: { cobrancaId: string; observacao?: string }) => {
+      const { data, error } = await supabase.rpc('cancelar_cobranca', {
+        p_cobranca_id: cobrancaId,
+        p_observacao: observacao || null,
+      });
+
+      if (error) throw error;
+
+      const response = data as RpcResponse;
+      if (response.status === 'ERROR') {
+        throw { code: response.code, message: response.message };
+      }
+
+      return response;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && query.queryKey[0] === '/api/cobrancas',
-      });
+      queryClient.invalidateQueries({ queryKey: [COBRANCAS_QUERY_KEY] });
       toast({
         title: 'Cobrança cancelada',
         description: 'A cobrança foi cancelada com sucesso',
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: 'Erro ao cancelar cobrança',
-        description: error.message,
+        description: error.message || 'Erro desconhecido',
         variant: 'destructive',
       });
     },
@@ -147,59 +164,76 @@ export function useCancelarCobranca() {
 }
 
 export function useMarcarCobrancaPago() {
-  const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  return useMutation<MarcarPagoResponse, ApiError, MarcarPagoParams>({
-    mutationFn: async (params) => {
-      return await callSupabase<MarcarPagoResponse>(async () =>
-        await supabase.rpc('marcar_cobranca_pago', params)
-      );
+  return useMutation({
+    mutationFn: async (params: MarcarPagoParams) => {
+      const { data, error } = await supabase.rpc('marcar_cobranca_pago', params);
+
+      if (error) throw error;
+
+      const response = data as RpcResponse;
+      if (response.status === 'ERROR') {
+        throw { code: response.code, message: response.message };
+      }
+
+      return response;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && query.queryKey[0] === '/api/cobrancas',
-      });
+      queryClient.invalidateQueries({ queryKey: [COBRANCAS_QUERY_KEY] });
       toast({
         title: 'Cobrança marcada como paga',
         description: 'A cobrança foi atualizada com sucesso',
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: 'Erro ao marcar como pago',
-        description: error.message,
+        description: error.message || 'Erro desconhecido',
         variant: 'destructive',
       });
     },
   });
 }
 
+interface GerarLinkResponse {
+  link_pagamento: string;
+}
+
 export function useGerarLinkPagamento() {
-  const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  return useMutation<GerarLinkPagamentoResponse, ApiError, string>({
-    mutationFn: async (cobrancaId) => {
-      return await callSupabase<GerarLinkPagamentoResponse>(async () =>
-        await supabase.rpc('gerar_link_pagamento', {
-          p_cobranca_id: cobrancaId,
-        })
-      );
+  return useMutation({
+    mutationFn: async (cobrancaId: string): Promise<GerarLinkResponse> => {
+      const { data, error } = await supabase.rpc('gerar_link_pagamento', {
+        p_cobranca_id: cobrancaId,
+      });
+
+      if (error) throw error;
+
+      const response = data as RpcResponse;
+      if (response.status === 'ERROR') {
+        throw { code: response.code, message: response.message };
+      }
+
+      // Retorna o link do campo data
+      return {
+        link_pagamento: response.data?.link_pagamento || response.data?.link || '',
+      };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && query.queryKey[0] === '/api/cobrancas',
-      });
+      queryClient.invalidateQueries({ queryKey: [COBRANCAS_QUERY_KEY] });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: 'Erro ao gerar link',
-        description: error.message,
+        description: error.message || 'Erro desconhecido',
         variant: 'destructive',
       });
     },
   });
+}
+
+export function invalidarCacheCobrancas() {
+  queryClient.invalidateQueries({ queryKey: [COBRANCAS_QUERY_KEY] });
 }
