@@ -30,6 +30,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useAssinaturasCliente, useCancelarAssinaturaCliente, useSuspenderAssinaturaCliente, useReativarAssinaturaCliente } from "@/hooks/useAssinaturasCliente";
 import type { AssinaturaClienteStatus } from "@/types/assinatura-cliente";
+import ModalNovaAssinatura from "@/components/ModalNovaAssinatura";
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -58,6 +59,7 @@ function getStatusBadge(status: AssinaturaClienteStatus) {
 export default function AssinaturasClientes() {
   const [filtroStatus, setFiltroStatus] = useState<AssinaturaClienteStatus | "TODOS">("TODOS");
   const [busca, setBusca] = useState("");
+  const [modalNovaAssinaturaOpen, setModalNovaAssinaturaOpen] = useState(false);
 
   const { data, isLoading, refetch } = useAssinaturasCliente({
     p_status: filtroStatus === "TODOS" ? undefined : filtroStatus,
@@ -104,7 +106,7 @@ export default function AssinaturasClientes() {
             Gerencie as assinaturas dos seus clientes
           </p>
         </div>
-        <Button data-testid="button-nova-assinatura" disabled>
+        <Button data-testid="button-nova-assinatura" onClick={() => setModalNovaAssinaturaOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Nova Assinatura
         </Button>
@@ -233,6 +235,15 @@ export default function AssinaturasClientes() {
           )}
         </CardContent>
       </Card>
+
+      <ModalNovaAssinatura
+        open={modalNovaAssinaturaOpen}
+        onClose={() => setModalNovaAssinaturaOpen(false)}
+        onSuccess={() => {
+          setModalNovaAssinaturaOpen(false);
+          refetch();
+        }}
+      />
     </div>
   );
 }

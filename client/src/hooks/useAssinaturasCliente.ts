@@ -9,6 +9,8 @@ import type {
   ListarAssinaturasClienteResponse,
   CriarAssinaturaClienteParams,
   CriarAssinaturaClienteResponse,
+  CriarAssinaturaClienteWarningResponse,
+  ApiResponseEnvelope,
   CancelarAssinaturaClienteParams,
   SuspenderAssinaturaClienteParams,
   ReativarAssinaturaClienteParams,
@@ -69,19 +71,30 @@ export function useCriarAssinaturaCliente() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (params: CriarAssinaturaClienteParams) => {
-      const result = await callSupabase<CriarAssinaturaClienteResponse>(
-        async () =>
-          await supabase.rpc("criar_assinatura_cliente", params)
-      );
-      return result;
+    mutationFn: async (params: CriarAssinaturaClienteParams): Promise<ApiResponseEnvelope<CriarAssinaturaClienteResponse | CriarAssinaturaClienteWarningResponse>> => {
+      const { data, error } = await supabase.rpc("criar_assinatura_cliente", params);
+      
+      if (error) {
+        console.error("Erro de rede/Supabase ao criar assinatura:", error);
+        throw new Error(error.message || "Erro de conexão ao criar assinatura");
+      }
+      
+      const envelope = data as ApiResponseEnvelope<CriarAssinaturaClienteResponse | CriarAssinaturaClienteWarningResponse>;
+      
+      if (envelope?.status === 'ERROR') {
+        throw new Error(envelope.message || "Erro ao criar assinatura");
+      }
+      
+      return envelope;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [ASSINATURAS_CLIENTE_QUERY_KEY] });
-      toast({
-        title: "Assinatura criada",
-        description: "A assinatura foi criada com sucesso.",
-      });
+    onSuccess: (result) => {
+      if (result?.status === 'OK') {
+        queryClient.invalidateQueries({ queryKey: [ASSINATURAS_CLIENTE_QUERY_KEY] });
+        toast({
+          title: "Assinatura criada",
+          description: result.message || "A assinatura foi criada com sucesso.",
+        });
+      }
     },
     onError: (error: Error) => {
       toast({

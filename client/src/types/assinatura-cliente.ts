@@ -51,16 +51,28 @@ export interface ListarAssinaturasClienteResponse {
 export interface CriarAssinaturaClienteParams {
   p_cliente_id: string;
   p_cliente_plano_id: string;
-  p_data_inicio: string;
-  p_observacao?: string;
+  p_inicio?: string;
+  p_data_vencimento_primeira_cobranca?: string;
 }
 
 export interface CriarAssinaturaClienteResponse {
   assinatura_id: string;
-  cliente_id: string;
-  plano_id: string;
-  status: AssinaturaClienteStatus;
-  data_inicio: string;
+  cobranca_id: string;
+  valor_primeira_cobranca: number;
+  data_vencimento_primeira_cobranca: string;
+}
+
+export interface CriarAssinaturaClienteWarningResponse {
+  assinatura_existente_id: string;
+}
+
+export type ApiStatus = 'OK' | 'ERROR' | 'WARNING';
+
+export interface ApiResponseEnvelope<T> {
+  status: ApiStatus;
+  message: string;
+  code?: string;
+  data?: T;
 }
 
 export interface CancelarAssinaturaClienteParams {
