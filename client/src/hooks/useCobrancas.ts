@@ -18,7 +18,7 @@ export function useCobrancas(params?: ListarCobrancasParams) {
   const query = useQuery<Cobranca[]>({
     queryKey,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('listar_cobrancas_cliente', {
+      const rpcParams = {
         p_cliente_id: params?.p_cliente_id || null,
         p_cliente_assinatura_id: params?.p_cliente_assinatura_id || null,
         p_status_pagamento: params?.p_status_pagamento || null,
@@ -26,7 +26,11 @@ export function useCobrancas(params?: ListarCobrancasParams) {
         p_data_vencimento_fim: params?.p_data_vencimento_fim || null,
         p_limit: params?.p_limit || 100,
         p_offset: params?.p_offset || 0,
-      });
+      };
+      
+      console.log('[useCobrancas] RPC params:', JSON.stringify(rpcParams));
+      
+      const { data, error } = await supabase.rpc('listar_cobrancas_cliente', rpcParams);
 
       if (error) throw error;
       
