@@ -2,70 +2,141 @@ import DashboardKPICard from "@/components/DashboardKPICard";
 import CobrancaTable from "@/components/CobrancaTable";
 import { DollarSign, Users, FileText, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useDashboard } from "@/hooks/useDashboard";
+import { formatCurrency } from "@/lib/masks";
+
+function formatTrend(value: number | null): { value: string; isPositive: boolean } | undefined {
+  if (value === null) return undefined;
+  return {
+    value: `${value >= 0 ? '+' : ''}${value}%`,
+    isPositive: value >= 0
+  };
+}
+
+function getMonthName(date: Date = new Date()): string {
+  return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+}
+
+function capitalizeFirst(str: string): string {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
 
 export default function Dashboard() {
-  // TODO: Remove mock data
-  const mockCobrancas = [
-    {
-      id: '1',
-      cliente: 'Maria Santos',
-      descricao: 'Mensalidade Janeiro/2024',
-      valor: 250.00,
-      dataVencimento: '2024-01-10',
-      statusPagamento: 'PAGO' as const,
-    },
-    {
-      id: '2',
-      cliente: 'João Oliveira',
-      descricao: 'Mensalidade Janeiro/2024',
-      valor: 350.00,
-      dataVencimento: '2024-01-15',
-      statusPagamento: 'EM_ABERTO' as const,
-    },
-    {
-      id: '3',
-      cliente: 'Ana Costa',
-      descricao: 'Consulta Avulsa',
-      valor: 180.00,
-      dataVencimento: '2024-01-20',
-      statusPagamento: 'FALHOU' as const,
-    },
-  ];
+  const { kpis, cobrancasRecentes, loading, error, refetch } = useDashboard();
+  const currentYear = new Date().getFullYear();
+  const currentMonthName = capitalizeFirst(getMonthName());
+
+  if (error) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold" data-testid="text-page-title">Dashboard</h1>
+          <p className="text-muted-foreground">Visão geral do seu negócio</p>
+        </div>
+        
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between">
+            <span>Erro ao carregar dados: {error}</span>
+            <Button variant="outline" size="sm" onClick={refetch}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Tentar novamente
+            </Button>
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <h1 className="text-3xl font-bold" data-testid="text-page-title">Dashboard</h1>
         <p className="text-muted-foreground">Visão geral do seu negócio</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <DashboardKPICard
-          title="Faturamento Mensal"
-          value="R$ 12.450,00"
-          subtitle="Janeiro 2024"
-          icon={DollarSign}
-          trend={{ value: '+12%', isPositive: true }}
-        />
-        <DashboardKPICard
-          title="Faturamento Anual"
-          value="R$ 142.300,00"
-          subtitle="2024"
-          icon={TrendingUp}
-          trend={{ value: '+25%', isPositive: true }}
-        />
-        <DashboardKPICard
-          title="Clientes Ativos"
-          value="42"
-          subtitle="3 inativos"
-          icon={Users}
-        />
-        <DashboardKPICard
-          title="Cobranças Geradas"
-          value="156"
-          subtitle="Este mês"
-          icon={FileText}
-        />
+        {loading ? (
+          <>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-28 mb-2" />
+                <Skeleton className="h-4 w-20" />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-28 mb-2" />
+                <Skeleton className="h-4 w-20" />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-12 mb-2" />
+                <Skeleton className="h-4 w-16" />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-12 mb-2" />
+                <Skeleton className="h-4 w-16" />
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <>
+            <DashboardKPICard
+              title="Faturamento Mensal"
+              value={formatCurrency(kpis.faturamentoMensal)}
+              subtitle={currentMonthName}
+              icon={DollarSign}
+              trend={formatTrend(kpis.tendenciaMensal)}
+              data-testid="card-faturamento-mensal"
+            />
+            <DashboardKPICard
+              title="Faturamento Anual"
+              value={formatCurrency(kpis.faturamentoAnual)}
+              subtitle={`${currentYear}`}
+              icon={TrendingUp}
+              trend={formatTrend(kpis.tendenciaAnual)}
+              data-testid="card-faturamento-anual"
+            />
+            <DashboardKPICard
+              title="Clientes Ativos"
+              value={String(kpis.clientesAtivos)}
+              subtitle={kpis.clientesInativos > 0 ? `${kpis.clientesInativos} inativo${kpis.clientesInativos > 1 ? 's' : ''}` : 'Nenhum inativo'}
+              icon={Users}
+              data-testid="card-clientes-ativos"
+            />
+            <DashboardKPICard
+              title="Cobranças Geradas"
+              value={String(kpis.cobrancasGeradasMes)}
+              subtitle="Este mês"
+              icon={FileText}
+              data-testid="card-cobrancas-geradas"
+            />
+          </>
+        )}
       </div>
 
       <Card>
@@ -74,7 +145,22 @@ export default function Dashboard() {
           <CardDescription>Últimas cobranças geradas</CardDescription>
         </CardHeader>
         <CardContent>
-          <CobrancaTable cobrancas={mockCobrancas} />
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-12 w-32" />
+                  <Skeleton className="h-12 flex-1" />
+                  <Skeleton className="h-12 w-24" />
+                  <Skeleton className="h-12 w-24" />
+                  <Skeleton className="h-8 w-20" />
+                  <Skeleton className="h-8 w-8" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <CobrancaTable cobrancas={cobrancasRecentes} />
+          )}
         </CardContent>
       </Card>
     </div>
