@@ -10,12 +10,14 @@ export interface DadosCobrancaPublica {
     status_gateway: string | null;
     link_pagamento: string | null;
     observacao: string | null;
+    descricao?: string;
   };
   assinante: {
     nome: string;
     email: string;
     whatsapp: string;
     cpf_cnpj: string;
+    is_pj?: boolean;
   };
   assinatura: {
     id: string;
@@ -31,8 +33,33 @@ export interface DadosCobrancaPublica {
     ind_gratuito: boolean;
     valor_mensal: number;
     valor_anual: number;
+    periodicidade?: string;
   } | null;
 }
+
+export interface IniciarPagamentoRequest {
+  cobranca_id: string;
+  meio_pagamento: 'OPF_PIX_IMEDIATO' | 'OPF_PIX_AUTOMATICO';
+}
+
+export interface IniciarPagamentoResponse {
+  payment_url: string;
+  cobranca_id: string;
+  valor: number;
+  descricao: string;
+  meio_pagamento: string;
+  is_pix_automatico: boolean;
+  is_cobranca_avulsa: boolean;
+}
+
+export type IniciarPagamentoErrorCode =
+  | 'BILLING_NOT_FOUND'
+  | 'BILLING_NOT_OPEN'
+  | 'PAYMENT_IN_PROGRESS'
+  | 'RECEIVER_NOT_CONFIGURED'
+  | 'PIX_AUTO_REQUIRES_SUBSCRIPTION'
+  | 'PIX_AUTO_REQUIRES_PJ_RECEIVER'
+  | 'DADOS_INCOMPLETOS';
 
 export interface ApiResponsePublica<T> {
   status: 'OK' | 'ERROR';

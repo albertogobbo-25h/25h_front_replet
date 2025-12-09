@@ -1,0 +1,100 @@
+# Edge Function: iniciar_pagto_cliente
+
+Inicia pagamento de cobrança do cliente final (PIX).
+
+## Endpoint
+
+```
+POST /functions/v1/iniciar_pagto_cliente
+```
+
+## Request
+
+```typescript
+{
+  cobranca_id: string,      // UUID da cobrança
+  meio_pagamento: "OPF_PIX_IMEDIATO" | "OPF_PIX_AUTOMATICO"
+}
+```
+
+## Response (Sucesso)
+
+```typescript
+{
+  status: "OK",
+  message: "Link de pagamento gerado com sucesso!",
+  data: {
+    payment_url: string,      // URL para redirecionar o cliente
+    cobranca_id: string,
+    valor: number,
+    descricao: string,
+    meio_pagamento: string,
+    is_pix_automatico: boolean,
+    is_cobranca_avulsa: boolean
+  }
+}
+```
+
+## Erros Comuns
+
+| Código | HTTP | Descrição |
+|--------|------|-----------|
+| `BILLING_NOT_FOUND` | 404 | Cobrança não encontrada |
+| `BILLING_NOT_OPEN` | 400 | Cobrança não está em aberto |
+| `PAYMENT_IN_PROGRESS` | 409 | Já existe pagamento em andamento |
+| `RECEIVER_NOT_CONFIGURED` | 400 | Assinante sem recebedor configurado |
+| `PIX_AUTO_REQUIRES_SUBSCRIPTION` | 400 | PIX Auto só para assinaturas |
+| `PIX_AUTO_REQUIRES_PJ_RECEIVER` | 400 | PIX Auto só para recebedor PJ |
+| `DADOS_INCOMPLETOS` | 400 | Cliente sem dados completos |
+
+## Regras PIX Automático
+
+Disponível apenas se **todas** as condições:
+- Cobrança vinculada a assinatura (não avulsa)
+- Plano com periodicidade
+- Assinante (recebedor) é PJ
+
+Caso contrário: use `OPF_PIX_IMEDIATO`.
+
+## Exemplo de Uso
+
+```typescript
+const response = await fetch(
+  `${SUPABASE_URL}/functions/v1/iniciar_pagto_cliente`,
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'apikey': SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify({
+      cobranca_id: '019b0380-13f6-705b-9efc-a1c05e6519ba',
+      meio_pagamento: 'OPF_PIX_IMEDIATO'
+    })
+  }
+)
+
+const data = await response.json()
+
+if (data.status === 'OK') {
+  // Redirecionar cliente para pagar
+  window.location.href = data.data.payment_url
+} else {
+  // Mostrar erro
+  console.error(data.code, data.message)
+}
+```
+
+## Fluxo Típico
+
+```
+1. Cliente acessa /publico/pagar/{cobranca_id}
+2. Frontend chama consultar_cobranca_sem_auth (RPC)
+3. Exibe dados da cobrança
+4. Cliente clica "Pagar"
+5. Frontend chama esta Edge Function
+6. Redireciona para payment_url (Pluggy)
+7. Webhook atualiza status quando pago
+```
+

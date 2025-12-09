@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useSearch } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -15,9 +15,19 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, CreditCard, Zap, CheckCircle2, XCircle, Clock, AlertCircle } from "lucide-react";
 import { formatCurrency } from "@/lib/masks";
-import type { DadosCobrancaPublica, ApiResponsePublica } from "@/types/pagamento-publico";
+import type { DadosCobrancaPublica, ApiResponsePublica, IniciarPagamentoResponse, IniciarPagamentoErrorCode } from "@/types/pagamento-publico";
 import type { MeioPagamento } from "@/types/assinatura";
 import ThemeToggle from "@/components/ThemeToggle";
+
+const ERROR_MESSAGES: Record<IniciarPagamentoErrorCode | string, string> = {
+  'BILLING_NOT_FOUND': 'Cobrança não encontrada. Verifique se o link está correto.',
+  'BILLING_NOT_OPEN': 'Esta cobrança não está mais em aberto para pagamento.',
+  'PAYMENT_IN_PROGRESS': 'Já existe um pagamento em andamento para esta cobrança. Aguarde alguns instantes.',
+  'RECEIVER_NOT_CONFIGURED': 'O beneficiário ainda não configurou os dados para recebimento. Entre em contato com ele.',
+  'PIX_AUTO_REQUIRES_SUBSCRIPTION': 'PIX Automático só está disponível para cobranças de assinaturas.',
+  'PIX_AUTO_REQUIRES_PJ_RECEIVER': 'PIX Automático só está disponível quando o beneficiário é Pessoa Jurídica.',
+  'DADOS_INCOMPLETOS': 'Seus dados cadastrais estão incompletos. Entre em contato com o beneficiário.',
+};
 
 export default function PagamentoPublico() {
   const searchParams = useSearch();
@@ -26,8 +36,33 @@ export default function PagamentoPublico() {
   const [dados, setDados] = useState<DadosCobrancaPublica | null>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
-  const [meioPagamento, setMeioPagamento] = useState<MeioPagamento>('OPF_PIX_AUTOMATICO');
+  const [erroPagamento, setErroPagamento] = useState<string | null>(null);
+  const [meioPagamento, setMeioPagamento] = useState<MeioPagamento>('OPF_PIX_IMEDIATO');
   const [processando, setProcessando] = useState(false);
+
+  const pixAutoDisponivelInfo = useMemo(() => {
+    if (!dados) return { disponivel: false, motivo: '' };
+    
+    const temAssinatura = dados.assinatura !== null;
+    const recebedorPJ = dados.assinante.is_pj ?? 
+      (dados.assinante.cpf_cnpj?.length === 14);
+    const temPeriodicidade = !!(
+      dados.assinatura?.periodicidade || 
+      dados.plano?.periodicidade
+    );
+    
+    if (!temAssinatura) {
+      return { disponivel: false, motivo: 'Disponível apenas para cobranças de assinaturas' };
+    }
+    if (!temPeriodicidade) {
+      return { disponivel: false, motivo: 'Disponível apenas para planos com periodicidade definida' };
+    }
+    if (!recebedorPJ) {
+      return { disponivel: false, motivo: 'Disponível apenas quando o beneficiário é Pessoa Jurídica' };
+    }
+    
+    return { disponivel: true, motivo: '' };
+  }, [dados]);
 
   useEffect(() => {
     async function carregarCobranca() {
@@ -92,18 +127,46 @@ export default function PagamentoPublico() {
   };
 
   const handleConfirmarPagamento = async () => {
+    if (!dados?.cobranca.id) return;
+    
     setProcessando(true);
+    setErroPagamento(null);
+    
     try {
-      // TODO: Integrar com Edge Function de pagamento
-      console.log('Confirmar pagamento:', {
-        cobrancaId: dados?.cobranca.id,
-        meioPagamento
+      const { data: response, error } = await supabase.functions.invoke<
+        ApiResponsePublica<IniciarPagamentoResponse>
+      >('iniciar_pagto_cliente', {
+        body: {
+          cobranca_id: dados.cobranca.id,
+          meio_pagamento: meioPagamento
+        }
       });
-      
-      // Por enquanto, apenas simula processamento
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      alert('Funcionalidade em desenvolvimento. Em breve você poderá realizar o pagamento.');
+
+      if (error) {
+        console.error('Erro ao iniciar pagamento:', error);
+        setErroPagamento('Erro de conexão. Tente novamente em alguns instantes.');
+        return;
+      }
+
+      if (!response) {
+        setErroPagamento('Resposta inválida do servidor. Tente novamente.');
+        return;
+      }
+
+      if (response.status === 'ERROR') {
+        const mensagem = ERROR_MESSAGES[response.code || ''] || response.message || 'Erro ao processar pagamento.';
+        setErroPagamento(mensagem);
+        return;
+      }
+
+      if (response.status === 'OK' && response.data?.payment_url) {
+        window.location.href = response.data.payment_url;
+      } else {
+        setErroPagamento('Link de pagamento não disponível. Tente novamente.');
+      }
+    } catch (err) {
+      console.error('Erro ao iniciar pagamento:', err);
+      setErroPagamento('Erro inesperado ao processar pagamento. Tente novamente.');
     } finally {
       setProcessando(false);
     }
@@ -277,21 +340,26 @@ export default function PagamentoPublico() {
                     </Label>
                     <Select
                       value={meioPagamento}
-                      onValueChange={(value) => setMeioPagamento(value as MeioPagamento)}
+                      onValueChange={(value) => {
+                        setMeioPagamento(value as MeioPagamento);
+                        setErroPagamento(null);
+                      }}
                     >
                       <SelectTrigger id="meio-pagamento" data-testid="select-meio-pagamento">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="OPF_PIX_AUTOMATICO">
-                          <div className="flex items-center gap-2">
-                            <Zap className="h-4 w-4 text-primary" />
-                            <div>
-                              <p className="font-medium">PIX Automático</p>
-                              <p className="text-xs text-muted-foreground">Renovação automática mensal</p>
+                        {pixAutoDisponivelInfo.disponivel && (
+                          <SelectItem value="OPF_PIX_AUTOMATICO">
+                            <div className="flex items-center gap-2">
+                              <Zap className="h-4 w-4 text-primary" />
+                              <div>
+                                <p className="font-medium">PIX Automático</p>
+                                <p className="text-xs text-muted-foreground">Renovação automática mensal</p>
+                              </div>
                             </div>
-                          </div>
-                        </SelectItem>
+                          </SelectItem>
+                        )}
                         <SelectItem value="OPF_PIX_IMEDIATO">
                           <div className="flex items-center gap-2">
                             <CreditCard className="h-4 w-4" />
@@ -303,6 +371,12 @@ export default function PagamentoPublico() {
                         </SelectItem>
                       </SelectContent>
                     </Select>
+                    
+                    {!pixAutoDisponivelInfo.disponivel && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {pixAutoDisponivelInfo.motivo}
+                      </p>
+                    )}
                   </div>
 
                   {meioPagamento === 'OPF_PIX_AUTOMATICO' && (
@@ -321,6 +395,13 @@ export default function PagamentoPublico() {
                       <AlertDescription>
                         Com PIX Imediato, você autoriza somente o PIX da cobrança atual sem recorrência, sendo necessário autorizar a cobrança todos os meses.
                       </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {erroPagamento && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{erroPagamento}</AlertDescription>
                     </Alert>
                   )}
                 </>
