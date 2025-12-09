@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { useSearch } from "wouter";
+import { useSearch, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,9 +29,18 @@ const ERROR_MESSAGES: Record<IniciarPagamentoErrorCode | string, string> = {
   'DADOS_INCOMPLETOS': 'Seus dados cadastrais estão incompletos. Entre em contato com o beneficiário.',
 };
 
+function extractCobrancaId(location: string, searchParams: string): string | null {
+  const pathMatch = location.match(/\/(?:publico\/)?pagar\/([a-f0-9-]+)/i);
+  if (pathMatch?.[1]) return pathMatch[1];
+  
+  const queryParams = new URLSearchParams(searchParams);
+  return queryParams.get('c');
+}
+
 export default function PagamentoPublico() {
+  const [location] = useLocation();
   const searchParams = useSearch();
-  const cobrancaId = new URLSearchParams(searchParams).get('c');
+  const cobrancaId = extractCobrancaId(location, searchParams);
   
   const [dados, setDados] = useState<DadosCobrancaPublica | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,7 +82,7 @@ export default function PagamentoPublico() {
       }
 
       try {
-        const { data, error } = await supabase.rpc('consultar_cobranca_publica', {
+        const { data, error } = await supabase.rpc('consultar_cobranca_sem_auth', {
           p_cobranca_id: cobrancaId
         });
 
@@ -310,7 +319,7 @@ export default function PagamentoPublico() {
               <div className="bg-primary/5 border border-primary/20 rounded-lg p-6">
                 <Label className="text-muted-foreground">Valor a Pagar</Label>
                 <p className="text-4xl font-bold font-mono text-primary mt-2" data-testid="text-valor">
-                  {formatCurrency(dados.cobranca.valor)}
+                  {formatCurrency(dados.cobranca.valor_total ?? dados.cobranca.valor ?? 0)}
                 </p>
               </div>
 

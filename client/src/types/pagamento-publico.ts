@@ -1,38 +1,45 @@
 export interface DadosCobrancaPublica {
   cobranca: {
     id: string;
-    valor: number;
+    descricao?: string;
+    valor?: number;
+    valor_total?: number;
     data_emissao: string;
     data_vencimento: string;
     dthr_pagamento: string | null;
     status_pagamento: string;
     meio_pagamento: string | null;
-    status_gateway: string | null;
-    link_pagamento: string | null;
+    status_gateway?: string | null;
+    link_pagamento?: string | null;
     observacao: string | null;
-    descricao?: string;
+    vencida?: boolean;
+  };
+  cliente?: {
+    nome: string;
+    nome_visualizacao?: string;
+    cpf_cnpj?: string;
   };
   assinante: {
     nome: string;
-    email: string;
-    whatsapp: string;
-    cpf_cnpj: string;
+    email?: string;
+    whatsapp?: string;
+    cpf_cnpj?: string;
     is_pj?: boolean;
   };
-  assinatura: {
+  assinatura?: {
     id: string;
     status: string;
-    periodicidade: string;
-    data_inicio: string;
-    data_validade: string;
-    meio_pagamento: string;
+    periodicidade?: string;
+    data_inicio?: string;
+    data_validade?: string;
+    meio_pagamento?: string;
   } | null;
-  plano: {
+  plano?: {
     nome: string;
-    descricao: string;
-    ind_gratuito: boolean;
-    valor_mensal: number;
-    valor_anual: number;
+    descricao?: string;
+    ind_gratuito?: boolean;
+    valor_mensal?: number;
+    valor_anual?: number;
     periodicidade?: string;
   } | null;
 }

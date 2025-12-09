@@ -1,0 +1,467 @@
+# APIs Públicas SEM Autenticação - Links de Assinatura e Pagamento
+
+> Documentação para frontend implementar páginas públicas de assinatura e pagamento.
+
+---
+
+## 📋 Visão Geral
+
+Estas APIs permitem que **clientes finais não logados** realizem assinaturas e visualizem cobranças através de links públicos.
+
+**Características:**
+- ❌ Não requer autenticação
+- ✅ Acessível com cliente `anon`
+- ✅ Validações de segurança via UUIDs imprevisíveis
+
+---
+
+## 🔗 URLs dos Links Públicos
+
+### Link Tipo 1: Formulário de Assinatura
+```
+/publico/assinar/{plano_id}
+```
+
+**Parâmetros da URL:**
+| Parâmetro | Descrição | Onde obter |
+|-----------|-----------|------------|
+| `plano_id` | UUID do plano | Gerado pelo assinante no painel |
+
+**Exemplo:**
+```
+https://app.25h.com.br/publico/assinar/019adf1a-5a64-716f-972d-63183f9bc902
+```
+
+---
+
+### Link Tipo 2: Página de Pagamento
+```
+/publico/pagar/{cobranca_id}
+```
+
+**Parâmetros da URL:**
+| Parâmetro | Descrição | Onde obter |
+|-----------|-----------|------------|
+| `cobranca_id` | UUID da cobrança | Retornado ao criar assinatura ou cobrança |
+
+**Exemplo:**
+```
+https://app.25h.com.br/publico/pagar/019bcd12-3456-789a-bcde-f0123456789a
+```
+
+---
+
+## 📦 Padrão de Resposta
+
+```typescript
+interface ApiResponse<T> {
+  status: 'OK' | 'ERROR' | 'WARNING'
+  message: string
+  code?: string      // Apenas em erros/warnings
+  data?: T           // Dados da resposta
+}
+```
+
+---
+
+## 🔧 Funções Disponíveis
+
+### 1. `obter_plano_para_assinatura_sem_auth`
+
+**Quando usar:** Ao carregar a página `/publico/assinar/{plano_id}` para exibir informações do plano.
+
+```typescript
+// Extrair plano_id da URL
+const planoId = router.query.plano_id // ou useParams()
+
+const { data: result } = await supabase.rpc('obter_plano_para_assinatura_sem_auth', {
+  p_cliente_plano_id: planoId
+})
+```
+
+**Resposta sucesso:**
+```json
+{
+  "status": "OK",
+  "message": "Plano encontrado.",
+  "data": {
+    "plano": {
+      "id": "019adf1a-...",
+      "nome": "Plano Mensal",
+      "descricao": "Aulas semanais",
+      "tipo": "VALOR_FIXO",
+      "valor_mensal": 150.00,
+      "periodicidade": "MENSAL"
+    },
+    "assinante": {
+      "id": "a3f096d3-...",
+      "nome": "Academia XYZ",
+      "nome_fantasia": "XYZ Fitness",
+      "whatsapp": "11999998888",
+      "email": "contato@xyz.com"
+    }
+  }
+}
+```
+
+**Erros possíveis:**
+| Código | Descrição |
+|--------|-----------|
+| `PLANO_NAO_ENCONTRADO` | Link inválido ou plano excluído |
+| `PLANO_INATIVO` | Plano foi desativado |
+| `ASSINANTE_NAO_ENCONTRADO` | Assinante não existe |
+
+---
+
+### 2. `buscar_cliente_por_cpf_cnpj_sem_auth`
+
+**Quando usar:** Enquanto usuário digita CPF/CNPJ no formulário, para pré-preencher dados se cliente já existir.
+
+```typescript
+// Chamar quando CPF/CNPJ tiver 11 ou 14 dígitos
+const cpfCnpj = '12345678900' // Apenas números
+
+// Obter assinante_id do resultado de obter_plano_para_assinatura_sem_auth
+const assinanteId = planoData.assinante.id
+
+const { data: result } = await supabase.rpc('buscar_cliente_por_cpf_cnpj_sem_auth', {
+  p_assinante_id: assinanteId,
+  p_cpf_cnpj: cpfCnpj
+})
+```
+
+**Resposta - Cliente NÃO encontrado:**
+```json
+{
+  "status": "OK",
+  "message": "Cliente não encontrado.",
+  "data": {
+    "encontrado": false,
+    "cliente": null
+  }
+}
+```
+
+**Resposta - Cliente encontrado:**
+```json
+{
+  "status": "OK",
+  "message": "Cliente encontrado.",
+  "data": {
+    "encontrado": true,
+    "cliente": {
+      "id": "uuid",
+      "nome": "João Silva",
+      "whatsapp": "11987654321",
+      "email": "joao@email.com",
+      "cpf_cnpj": "12345678900",
+      "tipo_pessoa": "FISICA",
+      "rua": "Rua das Flores",
+      "numero": "123",
+      "bairro": "Centro",
+      "cidade": "São Paulo",
+      "uf": "SP",
+      "cep": "01234567",
+      "ind_ativo": true
+    }
+  }
+}
+```
+
+**Uso típico no formulário:**
+```typescript
+// Debounce de 500ms ao digitar CPF/CNPJ
+const handleCpfCnpjChange = debounce(async (value) => {
+  const cpfLimpo = value.replace(/\D/g, '')
+  
+  if (cpfLimpo.length === 11 || cpfLimpo.length === 14) {
+    const { data } = await supabase.rpc('buscar_cliente_por_cpf_cnpj_sem_auth', {
+      p_assinante_id: assinanteId,
+      p_cpf_cnpj: cpfLimpo
+    })
+    
+    if (data?.data?.encontrado) {
+      // Pré-preencher formulário
+      setFormData(data.data.cliente)
+      setClienteExistente(true)
+    }
+  }
+}, 500)
+```
+
+---
+
+### 3. `criar_assinatura_sem_auth`
+
+**Quando usar:** Ao submeter o formulário de assinatura.
+
+```typescript
+const dadosCliente = {
+  nome: 'João Silva',              // Obrigatório
+  whatsapp: '11987654321',         // Obrigatório (apenas números, 11 dígitos)
+  cpf_cnpj: '12345678900',         // Opcional
+  tipo_pessoa: 'FISICA',           // FISICA ou JURIDICA (obrigatório se cpf_cnpj)
+  email: 'joao@email.com',         // Opcional
+  rua: 'Rua das Flores',           // Opcional
+  numero: '123',                   // Opcional
+  complemento: 'Apto 45',          // Opcional
+  bairro: 'Centro',                // Opcional
+  cidade: 'São Paulo',             // Opcional
+  uf: 'SP',                        // Opcional (2 letras)
+  cep: '01234567'                  // Opcional (8 dígitos)
+}
+
+const { data: result } = await supabase.rpc('criar_assinatura_sem_auth', {
+  p_cliente_plano_id: planoId,
+  p_dados_cliente: dadosCliente,
+  p_confirmar_duplicacao: false
+})
+```
+
+**Resposta sucesso:**
+```json
+{
+  "status": "OK",
+  "message": "Assinatura criada com sucesso!",
+  "data": {
+    "cliente_id": "uuid",
+    "assinatura_id": "uuid",
+    "cobranca_id": "uuid",
+    "link_pagamento": "https://app.25h.com.br/publico/pagar/uuid",
+    "valor_primeira_cobranca": 150.00,
+    "data_vencimento": "2025-01-15",
+    "plano": {
+      "id": "uuid",
+      "nome": "Plano Mensal",
+      "valor_mensal": 150.00
+    },
+    "assinante": {
+      "id": "uuid",
+      "nome": "Academia XYZ"
+    }
+  }
+}
+```
+
+**⚠️ Resposta WARNING - Assinatura Duplicada:**
+```json
+{
+  "status": "WARNING",
+  "code": "ASSINATURA_DUPLICADA",
+  "message": "Você já possui uma assinatura ativa deste plano. Deseja criar outra?",
+  "data": {
+    "assinatura_existente_id": "uuid",
+    "cliente_id": "uuid",
+    "requer_confirmacao": true
+  }
+}
+```
+
+**Tratamento do WARNING:**
+```typescript
+if (result?.status === 'WARNING' && result?.code === 'ASSINATURA_DUPLICADA') {
+  // Exibir modal de confirmação
+  const confirmar = await showConfirmDialog(
+    'Assinatura Existente',
+    'Você já possui uma assinatura ativa deste plano. Deseja criar outra mesmo assim?'
+  )
+  
+  if (confirmar) {
+    // Chamar novamente com confirmação
+    const { data: resultConfirmado } = await supabase.rpc('criar_assinatura_sem_auth', {
+      p_cliente_plano_id: planoId,
+      p_dados_cliente: dadosCliente,
+      p_confirmar_duplicacao: true  // <-- Confirmar
+    })
+    
+    if (resultConfirmado?.status === 'OK') {
+      // Redirecionar para pagamento
+      router.push(resultConfirmado.data.link_pagamento)
+    }
+  }
+  return
+}
+
+if (result?.status === 'OK') {
+  // Redirecionar para página de pagamento
+  router.push(result.data.link_pagamento)
+}
+```
+
+**Erros possíveis:**
+| Código | Descrição |
+|--------|-----------|
+| `NOME_OBRIGATORIO` | Nome não informado |
+| `WHATSAPP_OBRIGATORIO` | WhatsApp não informado |
+| `INVALID_WHATSAPP` | Formato inválido (use 11 dígitos: DDD + 9 + número) |
+| `INVALID_EMAIL` | Email inválido |
+| `PLANO_NAO_ENCONTRADO` | Plano não existe |
+| `PLANO_INATIVO` | Plano foi desativado |
+| `PLANO_SEM_VALOR` | Plano não tem valor mensal configurado |
+
+---
+
+### 4. `consultar_cobranca_sem_auth`
+
+**Quando usar:** Ao carregar a página `/publico/pagar/{cobranca_id}`.
+
+```typescript
+// Extrair cobranca_id da URL
+const cobrancaId = router.query.cobranca_id
+
+const { data: result } = await supabase.rpc('consultar_cobranca_sem_auth', {
+  p_cobranca_id: cobrancaId
+})
+```
+
+**Resposta sucesso:**
+```json
+{
+  "status": "OK",
+  "message": "Cobrança encontrada.",
+  "data": {
+    "cobranca": {
+      "id": "uuid",
+      "descricao": "Plano Mensal - Aulas semanais",
+      "valor_total": 150.00,
+      "data_vencimento": "2025-01-15",
+      "status_pagamento": "EM_ABERTO",
+      "data_emissao": "2025-01-08",
+      "vencida": false
+    },
+    "cliente": {
+      "nome": "João Silva",
+      "nome_visualizacao": "João",
+      "cpf_cnpj": "123.456.789-00"
+    },
+    "plano": {
+      "nome": "Plano Mensal",
+      "descricao": "Aulas semanais",
+      "periodicidade": "MENSAL"
+    },
+    "assinante": {
+      "nome": "Academia XYZ",
+      "whatsapp": "11999998888",
+      "email": "contato@xyz.com"
+    }
+  }
+}
+```
+
+**Erros possíveis:**
+| Código | Descrição |
+|--------|-----------|
+| `COBRANCA_NAO_ENCONTRADA` | Link inválido |
+| `COBRANCA_JA_PAGA` | Cobrança já foi paga |
+| `COBRANCA_CANCELADA` | Cobrança foi cancelada |
+
+---
+
+## 🎨 Fluxo Recomendado para o Frontend
+
+### Página de Assinatura (`/publico/assinar/[plano_id]`)
+
+```
+1. Extrair plano_id da URL
+2. Chamar obter_plano_para_assinatura_sem_auth
+   - Se erro → Exibir "Link inválido ou expirado"
+   - Se OK → Exibir dados do plano e formulário
+
+3. Formulário com campos:
+   - Nome* 
+   - WhatsApp* (11 dígitos)
+   - CPF/CNPJ (ao digitar, chamar buscar_cliente_por_cpf_cnpj_sem_auth)
+   - Email
+   - Endereço (opcional)
+
+4. Se CPF encontrado → Pré-preencher campos
+
+5. Ao submeter → criar_assinatura_sem_auth
+   - Se WARNING → Modal de confirmação
+   - Se OK → Redirecionar para link_pagamento
+```
+
+### Página de Pagamento (`/publico/pagar/[cobranca_id]`)
+
+```
+1. Extrair cobranca_id da URL
+2. Chamar consultar_cobranca_sem_auth
+   - Se erro → Exibir mensagem apropriada
+   - Se OK → Exibir dados da cobrança
+
+3. Exibir:
+   - Nome do cliente
+   - Valor
+   - Vencimento (com destaque se vencida)
+   - Nome do assinante/empresa
+   - Contato do assinante
+
+4. Botão "Pagar" → (Edge Function de pagamento - Fase 5)
+```
+
+---
+
+## 🔒 Considerações de Segurança
+
+1. **UUIDs Imprevisíveis:** Os IDs usam UUID v7, impossíveis de adivinhar
+2. **Validações Rigorosas:** Toda requisição valida plano/cobrança/assinante ativos
+3. **Dados Limitados:** APIs públicas não expõem dados sensíveis (observações, IDs internos)
+4. **Rate Limiting:** TODO - Implementar se necessário para prevenir abuso
+
+---
+
+## 📱 Exemplo Next.js/React
+
+```typescript
+// pages/publico/assinar/[plano_id].tsx
+import { useRouter } from 'next/router'
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+export default function AssinarPage() {
+  const router = useRouter()
+  const { plano_id } = router.query
+  
+  const [plano, setPlano] = useState(null)
+  const [assinante, setAssinante] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  
+  useEffect(() => {
+    if (!plano_id) return
+    
+    async function carregarPlano() {
+      const { data } = await supabase.rpc('obter_plano_para_assinatura_sem_auth', {
+        p_cliente_plano_id: plano_id
+      })
+      
+      if (data?.status === 'OK') {
+        setPlano(data.data.plano)
+        setAssinante(data.data.assinante)
+      } else {
+        setError(data?.message || 'Link inválido')
+      }
+      setLoading(false)
+    }
+    
+    carregarPlano()
+  }, [plano_id])
+  
+  if (loading) return <Loading />
+  if (error) return <ErrorPage message={error} />
+  
+  return (
+    <FormularioAssinatura 
+      plano={plano}
+      assinante={assinante}
+      onSubmit={handleSubmit}
+    />
+  )
+}
+```
+
+---
+
+**Última Atualização:** Dezembro 2025  
+**Fase:** 4 - APIs Públicas SEM AUTH
+

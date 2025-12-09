@@ -22,6 +22,7 @@ import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminAssinantes from "@/pages/admin/AdminAssinantes";
 import AdminPlanos from "@/pages/admin/AdminPlanos";
 import PagamentoPublico from "@/pages/PagamentoPublico";
+import AssinarPublico from "@/pages/AssinarPublico";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -29,8 +30,12 @@ function Router() {
   const { user, loading, isAdmin } = useAuth();
   
   // Rotas públicas que não precisam de autenticação
-  if (location.startsWith('/pagar')) {
+  if (location.startsWith('/publico/pagar/') || location.startsWith('/pagar')) {
     return <PagamentoPublico />;
+  }
+  
+  if (location.startsWith('/publico/assinar/') || location.startsWith('/assinar/')) {
+    return <AssinarPublico />;
   }
   
   // Verificar se precisa de onboarding (usuário não tem nome salvo)
