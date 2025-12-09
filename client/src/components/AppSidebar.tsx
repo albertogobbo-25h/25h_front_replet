@@ -8,6 +8,7 @@ import {
   Package,
   LogOut,
   MessageSquare,
+  RefreshCw,
 } from "lucide-react";
 import {
   Sidebar,
@@ -26,20 +27,24 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "wouter";
 
-const assinanteItems = [
+const mainItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Clientes", url: "/clientes", icon: Users },
   { title: "Planos", url: "/planos", icon: Package },
+  { title: "Assinaturas", url: "/assinaturas", icon: RefreshCw },
   { title: "Cobranças", url: "/cobrancas", icon: FileText },
   { title: "Templates WhatsApp", url: "/templates-whatsapp", icon: MessageSquare },
-  { title: "Assinatura", url: "/assinatura", icon: CreditCard },
+];
+
+const assinanteOnlyItems = [
+  { title: "Minha Assinatura", url: "/minha-assinatura", icon: CreditCard },
   { title: "Perfil", url: "/perfil", icon: Settings },
 ];
 
 const adminItems = [
   { title: "Dashboard Admin", url: "/admin/dashboard", icon: LayoutDashboard },
   { title: "Assinantes", url: "/admin/assinantes", icon: UserCog },
-  { title: "Planos", url: "/admin/planos", icon: Package },
+  { title: "Planos Admin", url: "/admin/planos", icon: Package },
 ];
 
 interface AppSidebarProps {
@@ -78,10 +83,10 @@ export default function AppSidebar({ isAdmin = false }: AppSidebarProps) {
           <SidebarGroupLabel>Menu Principal</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {assinanteItems.map((item) => (
+              {mainItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
-                    <Link href={item.url} data-testid={`link-${item.title.toLowerCase()}`}>
+                    <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
                       <item.icon />
                       <span>{item.title}</span>
                     </Link>
@@ -91,6 +96,26 @@ export default function AppSidebar({ isAdmin = false }: AppSidebarProps) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {!isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Minha Conta</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {assinanteOnlyItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild>
+                      <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {isAdmin && (
           <SidebarGroup>

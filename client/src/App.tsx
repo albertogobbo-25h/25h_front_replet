@@ -13,8 +13,9 @@ import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Clientes from "@/pages/Clientes";
 import PlanosCliente from "@/pages/PlanosCliente";
+import AssinaturasClientes from "@/pages/AssinaturasClientes";
 import Cobrancas from "@/pages/Cobrancas";
-import Assinatura from "@/pages/Assinatura";
+import MinhaAssinatura from "@/pages/Assinatura";
 import Perfil from "@/pages/Perfil";
 import TemplatesWhatsApp from "@/pages/TemplatesWhatsApp";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
@@ -70,8 +71,10 @@ function Router() {
               <Route path="/dashboard" component={Dashboard} />
               <Route path="/clientes" component={Clientes} />
               <Route path="/planos" component={PlanosCliente} />
+              <Route path="/assinaturas" component={AssinaturasClientes} />
               <Route path="/cobrancas" component={Cobrancas} />
-              <Route path="/assinatura" component={Assinatura} />
+              <Route path="/minha-assinatura" component={MinhaAssinatura} />
+              <Route path="/assinatura" component={MinhaAssinatura} />
               <Route path="/templates-whatsapp" component={TemplatesWhatsApp} />
               <Route path="/perfil" component={Perfil} />
               <Route path="/admin/dashboard" component={AdminDashboard} />

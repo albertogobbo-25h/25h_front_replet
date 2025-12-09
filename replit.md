@@ -1,7 +1,7 @@
 # Sistema 25h.com.br - Gestão de Cobranças
 
 ## Overview
-Sistema SaaS de gestão de cobranças com PIX automático via Pluggy, desenvolvido para profissionais autônomos e pequenas empresas no Brasil. O projeto visa otimizar a gestão financeira dos usuários, economizando tempo e aumentando a rentabilidade. A plataforma oferece funcionalidades completas de autenticação, gestão de assinaturas, clientes e cobranças. A plataforma é exclusiva para Pessoa Jurídica (CNPJ).
+Sistema SaaS de gestão de cobranças com PIX automático via Pluggy, desenvolvido para profissionais autônomos e pequenas empresas no Brasil. O projeto visa otimizar a gestão financeira dos usuários, economizando tempo e aumentando a rentabilidade. A plataforma oferece funcionalidades completas de autenticação, gestão de assinaturas, clientes e cobranças, e é exclusiva para Pessoa Jurídica (CNPJ).
 
 ## User Preferences
 I prefer simple language and clear, concise explanations. I want iterative development with frequent, small updates. Ask for my confirmation before making any major architectural changes or implementing new features. Ensure all new code adheres to the existing coding style and uses Brazilian Portuguese localization where applicable. Do not make changes to files or folders unless explicitly instructed.
@@ -11,113 +11,52 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 ### UI/UX Decisions
 - **Color Scheme**: Professional blue (`hsl(217, 91%, 60%)`) as primary, with distinct colors for success, warning, and destructive actions.
 - **Typography**: Inter for general UI, Roboto Mono for financial values and dates.
-- **Components**: Utilizes `shadcn/ui` for standardized components (`DashboardKPICard`, `StatusBadge`, `ClienteTable`, `CobrancaTable`, `AppSidebar`, `PlanCard`, `ModalCliente`, `ModalPlanoCliente`, `ModalCobranca`, `ModalConfigContaBancaria`, `ModalDadosCadastrais`, `TemplatesWhatsAppTable`, `ModalTemplateWhatsApp`, `ModalEnviarWhatsApp`, `ProtectedRoute`).
+- **Components**: Utilizes `shadcn/ui` for standardized components.
 - **Localization**: Full Brazilian Portuguese (R$, WhatsApp masks, date formats, currency formatting).
 - **Design Principles**: Mobile-first responsive design, Dark mode support, Accessibility (WCAG AA contrast, visible labels, focus indicators).
 
 ### Technical Implementations
 - **Frontend**: React, TypeScript, Vite, Tailwind CSS, Wouter for routing, TanStack Query v5 for state management.
-- **Authentication**: Supabase (email/password, Google OAuth, session management, user metadata for onboarding, assinante_id and roles in AuthContext, role-based access control).
-- **Subscription Management**: Complete flow including plan selection, cadastral data validation, Pluggy PIX payment integration, conditional statuses, automatic polling, upgrade, and cancellation flows.
-- **Data Management**:
-  - Supabase PostgreSQL with multi-tenancy (app_data schema)
-  - RLS policies using `app_internal.current_assinante_id()` for tenant isolation
-  - All queries use `.schema('app_data')` for proper schema access
-- **API Response Pattern**:
-  - Unified helper `callSupabase()` in `lib/api-helper.ts` for all RPC/Edge Functions
-  - Consistent error handling with `ApiError` class (code, message, details)
-  - All backend responses follow `{status, message, data}` format
-  - Frontend automatically receives normalized data
-  - Generic `ApiResponse<T>` type for type-safe RPC responses.
-- **Masks**: Brazilian masks implemented for WhatsApp, CNPJ, CEP.
-- **Testing**: `data-testid` attributes are extensively used for E2E testing with Playwright.
-- **Logout Security**: Complete cache clearing implemented to prevent data leakage between users (queryClient.clear(), state reset, localStorage cleanup after successful Supabase sign-out).
+- **Authentication**: Supabase (email/password, Google OAuth, session management, role-based access control).
+- **Subscription Management**: Complete flow including plan selection, cadastral data validation, Pluggy PIX payment, automatic polling, upgrade, and cancellation.
+- **Data Management**: Supabase PostgreSQL with multi-tenancy (app_data schema) and RLS policies for tenant isolation. All queries use `.schema('app_data')`.
+- **API Response Pattern**: Unified helper `callSupabase()` for RPC/Edge Functions with consistent error handling (`ApiError`) and `{status, message, data}` format.
+- **Masks**: Brazilian masks for WhatsApp, CNPJ, CEP.
+- **Testing**: `data-testid` attributes used for E2E testing with Playwright.
+- **Logout Security**: Complete cache clearing and state/localStorage cleanup.
 
 ### Feature Specifications
-- **Authentication**: Login/Signup, onboarding with name and WhatsApp, automatic Free plan creation on signup, session management, route protection, role-based access control (ADMIN, PROFISSIONAL, CLIENTE).
-- **Dashboard**: KPI cards (revenue, clients, charges), recent charges table, trend indicators.
-- **Client Management**: Complete CRUD via Supabase RPCs (`listar_clientes`, `criar_cliente`, `atualizar_cliente`, `ativar_cliente`, `desativar_cliente`, `buscar_cliente_por_cpf_cnpj`). Fields: nome, nome_visualizacao, cpf_cnpj, tipo_pessoa (FISICA/JURIDICA), email, whatsapp, full address (rua, numero, complemento, bairro, cidade, uf, cep), observacao, ind_ativo. CPF/CNPJ duplicate validation before creation. Filters by name and status with automatic refresh. Uses `useClientes.ts` hooks for all operations.
-- **Client Plans Management**: Create and manage service plans for clients (VALOR_FIXO, PACOTE, VALOR_VARIAVEL), CRUD operations, dynamic form fields.
-- **Charge Management**: Complete CRUD operations for charges via Supabase RPCs (`listar_cobrancas_cliente`, `criar_cobranca_extra`, `marcar_cobranca_pago`, `cancelar_cobranca`, `gerar_link_pagamento`). Uses `useCobrancas.ts` hook with mutations for all operations. Features: create standalone charges, list charges with pagination, dynamic status calculation (EM_ABERTO, VENCIDO, PAGO, CANCELADO, FALHOU), comprehensive filters, dynamic totalizers, actions on charges (view details, send via WhatsApp with template selection, mark as paid manually, cancel, generate/copy payment link). All mutations use `callSupabase` helper for consistent error handling.
-- **Templates WhatsApp**: Complete CRUD for WhatsApp message templates with markdown support, automatic placeholder extraction, real-time preview, tabbed interface (Editor | Preview), integrates with Supabase RPCs (`listar_templates_whatsapp`, `criar_template_whatsapp`, `atualizar_template_whatsapp`, `excluir_template_whatsapp`), automatic tipo generation via slugify, backend extracts and returns placeholders automatically.
-- **WhatsApp Integration**: Send messages via Edge Function `enviar-mensagem-whatsapp`, template selection modal, automatic placeholder filling with charge data, preview before sending. Supports two contexts: `saas` (institutional templates) and `assinante` (custom subscriber templates). WhatsApp number automatically normalized, assinante_id automatically injected for assinante context.
-- **Admin Panel**: Protected admin routes requiring ADMIN role, admin dashboard with system metrics, assinantes management, planos management, conditional sidebar menu based on user roles.
-- **Public Payment Page**: Unauthenticated page accessible via `/pagar?c={cobranca_id}` for clients to view charge details and select payment method (PIX Automático or PIX Imediato). Uses RPC `consultar_cobranca_publica` for secure data retrieval without exposing sensitive information. Displays status badges (Pago/Cancelado/Em Aberto/Vencido), charge details (beneficiary, value, due date), and payment form. Currently implements UI only (payment confirmation is stub for future integration).
-- **Subscription Management** (Complete Flow):
-  - **Page Structure**: Two tabs (Plano Atual, Histórico) with automatic 30s polling
-  - **Ativa**: Display current plan with "Mudar Plano" and "Cancelar Assinatura" actions
-  - **Pendente (AGUARDANDO_PAGAMENTO)**: Alert showing plan, value, due date, and "Pagar Agora" + "Cancelar" actions
-  - **Suspensa**: Alert with "Renovar Agora" action (creates new pending subscription)
-  - **Sem Assinatura**: Call-to-action to choose plan
-  - **Histórico**: Lists all subscriptions (including CANCELADAS) with status badges
-  - **Actions Implemented**:
-    - Pagar Pendente → Opens payment modal with PIX options
-    - Mudar Plano → Opens plan selection modal, validates data, creates pending subscription
-    - Cancelar Ativa/Pendente → Opens cancellation modal (backend function pending)
-    - Renovar (when Suspensa) → Opens plan selection modal
-  - **Business Rules Enforced**:
-    - Maximum 1 AGUARDANDO_PAGAMENTO subscription per user
-    - Coexistence of ATIVA + PENDENTE allowed (upgrade/renewal scenario)
-    - Payment activation cancels previous ATIVA subscription
-    - Validity projection based on previous non-free subscription
-- **Profile**: Complete integration with Supabase RPCs (`obter_dados_assinante`, `atualizar_dados_assinante`), real-time data loading, CNPJ-only validation, fields (Razão Social, Nome Fantasia, CNPJ, Email, WhatsApp, full address), Brazilian masks, loading states and error handling. Includes **Bank Account (Recebedor)** section for viewing/configuring PIX payment receiving account.
-- **Bank Account Management (Recebedor)**: Complete flow for configuring bank account before creating clients or charges:
-  - **Types**: `Recebedor`, `InstituicaoFinanceira`, `TipoConta` in `types/recebedor.ts`
-  - **Hooks**: `useRecebedor` (query active receiver), `useListarRecebedores`, `useInstituicoesFinanceiras`, `useValidarContaDuplicada`, `useValidarRecebedor` (action interceptor)
-  - **Modal**: `ModalConfigContaBancaria` with bank selection via ComboboxBanco, account details, and retry on failure
-  - **Components**: `ComboboxBanco` - Autocomplete component for bank selection with real-time search (debounce 300ms), keyboard navigation, uses `listar_instituicoes_financeiras(p_busca, p_limit)` RPC
-  - **Validation Flow**: Blocks client/charge creation until bank account is configured with `id_recebedor_gateway`
-  - **RPCs**: `obter_recebedor_ativo()`, `listar_recebedores()`, `listar_instituicoes_financeiras(p_busca?, p_limit?, p_offset?)`
-  - **Edge Functions**: `cadastrar_recebedor`, `ativar_recebedor` for Pluggy integration
-  - **Integration Points**: Profile page (view/edit), Clientes page (validation alert + interception), Cobrancas page (validation alert + interception)
+- **Authentication**: Login/Signup, onboarding, automatic Free plan, session management, route protection, role-based access control (ADMIN, PROFISSIONAL, CLIENTE).
+- **Dashboard**: KPI cards, recent charges, trend indicators.
+- **Client Management**: Complete CRUD via Supabase RPCs, including validation and filtering.
+- **Client Plans Management**: CRUD for service plans (VALOR_FIXO, PACOTE, VALOR_VARIAVEL).
+- **Client Subscriptions Management**: List, suspend, cancel, reactivate subscriptions, with specific types and hooks.
+- **Charge Management**: Complete CRUD for charges via Supabase RPCs, including standalone or linked to subscriptions, dynamic statuses, comprehensive filters, and actions (send via WhatsApp, mark paid, cancel, generate payment link).
+- **Templates WhatsApp**: Complete CRUD for WhatsApp message templates with markdown support, placeholder extraction, and real-time preview.
+- **WhatsApp Integration**: Send messages via Edge Function, template selection modal, automatic placeholder filling.
+- **Admin Panel**: Protected routes for ADMIN role, dashboard, assinantes, and planos management.
+- **Public Payment Page**: Unauthenticated page for clients to view charge details and select payment method (PIX Automático or PIX Imediato).
+- **Subscription Management Flow**: Two tabs (Plano Atual, Histórico) with auto-polling, actions for plan changes, cancellation, renewal, and enforced business rules for subscription states and validity.
+- **Profile**: Integration with Supabase RPCs for viewing/updating subscriber data (CNPJ-only validation, full address), including a **Bank Account (Recebedor)** section.
+- **Bank Account Management (Recebedor)**: Complete flow for configuring bank accounts, including bank selection via ComboboxBanco, validation, and interception of client/charge creation until configured.
 
 ### System Design Choices
-- **Public Routes**: Page `/pagar?c={uuid}` bypasses authentication check in `App.tsx` using early return pattern before AuthContext validation. Uses Supabase anon key for secure RPC call to `consultar_cobranca_publica`.
-- **Onboarding Flow** (Detailed):
-  1. User signs up/logs in via Supabase Auth
-  2. Frontend calls `processar_pos_login(p_nome?, p_whatsapp?)`
-  3. Backend returns status: "OK", "ERROR", or "SEM ASSINATURA"
-  4. **First Access (user doesn't exist)**:
-     - If nome/whatsapp not provided → ERROR with code USER_NOT_FOUND_MISSING_DATA
-     - Frontend shows onboarding form to collect data
-     - If provided → Creates assinante, usuario, roles (ADMIN + PROFISSIONAL), and FREE subscription
-  5. **Navigation Logic**:
-     - status="OK" + assinatura.status=ATIVA → Dashboard
-     - status="OK" + assinatura.status=AGUARDANDO_PAGAMENTO → Subscription page (payment link)
-     - status="OK" + assinatura.status=SUSPENSA → Subscription page (renewal)
-     - status="OK" + assinatura.status=CANCELADA → Subscription page (new plan)
-     - status="SEM ASSINATURA" → Subscription page (plan selection)
-     - status="ERROR" + code=USER_NOT_FOUND_MISSING_DATA → Onboarding form
-  6. Free subscription is automatically created with validity = today + dias_degustacao
-- **Data Formatting**: Cadastral data is unformatted before backend transmission and formatted for frontend display.
-- **Form Protection**: User input in critical forms is protected against accidental resets.
-- **Business Rule**: The system exclusively supports Pessoa Jurídica (CNPJ).
-- **Edge Functions**: All Supabase Edge Function calls use `supabase.functions.invoke()` for automatic URL resolution, authentication header injection, and consistent error handling. Edge Functions used: `iniciar_pagto_assinante`, `cancelar_assinatura`, `enviar-mensagem-whatsapp`, `cadastrar_recebedor`, `ativar_recebedor`.
-- **Cascaded Validation Pattern**: Uses state machine in `useValidarRecebedor` hook with `flowStep: 'idle' | 'dados' | 'banco' | 'complete'`. Before creating clients/charges:
-  1. Validates cadastral data (CNPJ + Nome Fantasia) → opens `ModalDadosCadastrais` if incomplete
-  2. After cadastral success → validates bank account → opens `ModalConfigContaBancaria` if not configured
-  3. After bank success → executes pending action
-  - **State Machine Benefits**: Avoids race conditions from Dialog onOpenChange, explicit flow control, pending action preserved through multi-step flow
-  - **Technical Details**: `pendingBancoCheck` flag + useEffect ensures fresh `temRecebedorAtivo` check after data refetch
-  - **Cancellation Handling**: `flowCanceled` flag clears pending action only on explicit user cancellation
-- **Role Management**: User roles fetched via RPC `obter_funcoes_usuario` on login (app_data schema not directly accessible via REST), stored in AuthContext, used for conditional UI rendering and route protection. **NOTA**: RPC `obter_funcoes_usuario` deve ser criada no backend (ver BACKEND_TODO.md). Implementação temporária usa user_metadata.roles ou user_metadata.is_admin, com fallback para role PROFISSIONAL.
-- **Subscription Business Rules**:
-  - **Coexistence**: Can have one ATIVA and one PENDENTE subscription simultaneously (upgrade/renewal scenario)
-  - **Activation by Payment**: When payment is confirmed, PENDENTE becomes ATIVA and previous ATIVA is cancelled
-  - **Validity Projection**: 
-    - If there's ATIVA non-free subscription: new validity = old.data_validade + period
-    - If there's ATIVA free or no subscription: new validity = today + period
-  - **Subscription Creation**: User can create new subscription anytime (expired free or not)
-  - **Cancellation**: User can cancel ATIVA or PENDENTE; when cancelling PENDENTE, associated charge is also cancelled
-  - **Suspensa**: Occurs when subscription expires; user can start new cycle creating PENDENTE + charge
-  - **Idempotency**: Webhook must be idempotent (repeated calls return 200 without side effects)
+- **Public Routes**: `/pagar?c={uuid}` bypasses authentication using Supabase anon key for secure RPC calls.
+- **Onboarding Flow**: Manages user creation, initial data collection, and navigation based on subscription status. Free subscription automatically created.
+- **Data Formatting**: Cadastral data is unformatted for backend, formatted for frontend display.
+- **Form Protection**: User input in critical forms protected against accidental resets.
+- **Business Rule**: Exclusively supports Pessoa Jurídica (CNPJ).
+- **Edge Functions**: All Supabase Edge Function calls use `supabase.functions.invoke()` for automatic resolution and authentication. Used for payment initiation, subscription cancellation, WhatsApp messages, and receiver management.
+- **Cascaded Validation Pattern**: State machine in `useValidarRecebedor` hook ensures sequential validation of cadastral data and bank account before allowing client/charge creation.
+- **Role Management**: User roles fetched via RPC `obter_funcoes_usuario` and used for conditional UI/route protection.
+- **Subscription Business Rules**: Handles coexistence of ATIVA and PENDENTE subscriptions, activation by payment, validity projection, user-initiated cancellation, and idempotency for webhooks.
 
 ## External Dependencies
-- **Supabase**: Authentication (email/password, Google OAuth) and PostgreSQL database.
-- **Pluggy**: Automatic PIX payments and webhook-based status updates for subscriptions.
+- **Supabase**: Authentication and PostgreSQL database.
+- **Pluggy**: Automatic PIX payments and webhook-based status updates.
 - **Vite**: Frontend build tool.
 - **TanStack Query**: Data fetching and state management.
 - **shadcn/ui**: UI component library.
 - **Tailwind CSS**: Utility-first CSS framework.
-- **react-markdown**: Markdown rendering for WhatsApp templates preview.
-- **remark-gfm**: GitHub Flavored Markdown support for template preview.
+- **react-markdown**: Markdown rendering.
+- **remark-gfm**: GitHub Flavored Markdown support.
