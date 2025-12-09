@@ -4,6 +4,7 @@ import ModalCobranca from "@/components/ModalCobranca";
 import ModalEnviarWhatsApp from "@/components/ModalEnviarWhatsApp";
 import ModalConfigContaBancaria from "@/components/ModalConfigContaBancaria";
 import ModalDadosCadastrais from "@/components/ModalDadosCadastrais";
+import { PeriodNavigator, calcularIntervalo, type Granularidade } from "@/components/PeriodNavigator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -15,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Filter, Loader2, TrendingUp, TrendingDown, AlertTriangle, Building2, FileText, Link2, Copy } from "lucide-react";
+import { Plus, Loader2, TrendingUp, TrendingDown, AlertTriangle, Building2, FileText, Link2, Copy } from "lucide-react";
 import { useCobrancas, useCancelarCobranca, useMarcarCobrancaPago, useGerarLinkPagamento } from "@/hooks/useCobrancas";
 import { useToast } from "@/hooks/use-toast";
 import { useValidarRecebedor } from "@/hooks/useValidarRecebedor";
@@ -26,7 +27,8 @@ import type { Cobranca, StatusCobranca } from "@/types/cobranca";
 export default function Cobrancas() {
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>("todos");
-  const [periodoFilter, setPeriodoFilter] = useState<string>("mes_atual");
+  const [granularidade, setGranularidade] = useState<Granularidade>("mes");
+  const [periodoOffset, setPeriodoOffset] = useState<number>(0);
   const [modalNovaCobrancaOpen, setModalNovaCobrancaOpen] = useState(false);
   const [cobrancaSelecionada, setCobrancaSelecionada] = useState<Cobranca | null>(null);
   const [detalhesOpen, setDetalhesOpen] = useState(false);
@@ -50,40 +52,7 @@ export default function Cobrancas() {
 
   const loadingValidacao = loadingRecebedor || loadingDados;
 
-  const getDateRange = () => {
-    const hoje = new Date();
-    let dataInicio = new Date();
-    let dataFim = new Date();
-
-    switch (periodoFilter) {
-      case 'mes_atual':
-        dataInicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-        dataFim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
-        break;
-      case '3_meses':
-        dataInicio.setMonth(hoje.getMonth() - 3);
-        dataFim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
-        break;
-      case '6_meses':
-        dataInicio.setMonth(hoje.getMonth() - 6);
-        dataFim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
-        break;
-      case '12_meses':
-        dataInicio.setMonth(hoje.getMonth() - 12);
-        dataFim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
-        break;
-      default:
-        dataInicio.setMonth(hoje.getMonth() - 1);
-        dataFim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
-    }
-
-    return {
-      dataInicio: dataInicio.toISOString().split('T')[0],
-      dataFim: dataFim.toISOString().split('T')[0],
-    };
-  };
-
-  const { dataInicio, dataFim } = getDateRange();
+  const { dataInicio, dataFim } = calcularIntervalo(granularidade, periodoOffset);
 
   const { cobrancas, isLoading, refetch } = useCobrancas({
     p_data_vencimento_inicio: dataInicio,
@@ -333,41 +302,27 @@ export default function Cobrancas() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4" />
-            <CardTitle>Filtros</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full md:w-48" data-testid="select-status-filter">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="EM_ABERTO">Em Aberto</SelectItem>
-                <SelectItem value="PAGO">Pago</SelectItem>
-                <SelectItem value="CANCELADO">Cancelado</SelectItem>
-                <SelectItem value="FALHOU">Falhou</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={periodoFilter} onValueChange={setPeriodoFilter}>
-              <SelectTrigger className="w-full md:w-48" data-testid="select-periodo-filter">
-                <SelectValue placeholder="Período" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="mes_atual">Mês Atual</SelectItem>
-                <SelectItem value="3_meses">Últimos 3 Meses</SelectItem>
-                <SelectItem value="6_meses">Últimos 6 Meses</SelectItem>
-                <SelectItem value="12_meses">Últimos 12 Meses</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <PeriodNavigator
+          granularidade={granularidade}
+          onGranularidadeChange={setGranularidade}
+          periodoOffset={periodoOffset}
+          onPeriodoOffsetChange={setPeriodoOffset}
+        />
+
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full md:w-48" data-testid="select-status-filter">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os Status</SelectItem>
+            <SelectItem value="EM_ABERTO">Em Aberto</SelectItem>
+            <SelectItem value="PAGO">Pago</SelectItem>
+            <SelectItem value="CANCELADO">Cancelado</SelectItem>
+            <SelectItem value="FALHOU">Falhou</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       <Card>
         <CardHeader>

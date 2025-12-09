@@ -18,7 +18,7 @@ export function useCobrancas(params?: ListarCobrancasParams) {
   const query = useQuery<Cobranca[]>({
     queryKey,
     queryFn: async () => {
-      const rpcParams = {
+      const { data, error } = await supabase.rpc('listar_cobrancas_cliente', {
         p_cliente_id: params?.p_cliente_id || null,
         p_cliente_assinatura_id: params?.p_cliente_assinatura_id || null,
         p_status_pagamento: params?.p_status_pagamento || null,
@@ -26,32 +26,19 @@ export function useCobrancas(params?: ListarCobrancasParams) {
         p_data_vencimento_fim: params?.p_data_vencimento_fim || null,
         p_limit: params?.p_limit || 100,
         p_offset: params?.p_offset || 0,
-      };
-      
-      console.log('[useCobrancas] RPC params:', JSON.stringify(rpcParams));
-      
-      const { data, error } = await supabase.rpc('listar_cobrancas_cliente', rpcParams);
+      });
 
       if (error) throw error;
       
-      console.log('[useCobrancas] Raw RPC response:', JSON.stringify(data));
-      
-      // RPC retorna {status, message, data: {cobrancas: [...], total, limit, offset}}
       if (data?.data?.cobrancas && Array.isArray(data.data.cobrancas)) {
-        console.log('[useCobrancas] Found cobrancas in data.data.cobrancas:', data.data.cobrancas.length);
         return data.data.cobrancas as Cobranca[];
       }
-      // Fallback: resposta direta como array
       if (Array.isArray(data)) {
-        console.log('[useCobrancas] Data is direct array:', data.length);
         return data as Cobranca[];
       }
-      // Fallback: objeto com cobrancas na raiz
       if (data?.cobrancas && Array.isArray(data.cobrancas)) {
-        console.log('[useCobrancas] Found cobrancas in data.cobrancas:', data.cobrancas.length);
         return data.cobrancas as Cobranca[];
       }
-      console.log('[useCobrancas] No cobrancas found, returning empty array');
       return [] as Cobranca[];
     },
     staleTime: 0,
