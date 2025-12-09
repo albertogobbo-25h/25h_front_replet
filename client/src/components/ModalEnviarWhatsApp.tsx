@@ -92,15 +92,26 @@ export default function ModalEnviarWhatsApp({
       // Normalizar número WhatsApp (remover formatação, deixar apenas números)
       const whatsNormalizado = destinatario.whatsapp.replace(/\D/g, '');
 
-      // Construir payload base
+      // Construir payload base com aliases para compatibilidade com diferentes templates
+      const baseData = {
+        nome: destinatario.nome,
+        ...dadosCobranca,
+      };
+      
+      // Adicionar aliases para garantir compatibilidade com placeholders variados
+      const dataComAliases = {
+        ...baseData,
+        // Alias 'aluno' para templates que usam {{aluno}} ao invés de {{nome}}
+        aluno: baseData.nome || (dadosCobranca as any)?.cliente_nome || destinatario.nome,
+        // Alias 'descrição' (com acento) para templates que usam acento
+        'descrição': (dadosCobranca as any)?.descricao || '',
+      };
+
       const payload: any = {
         contexto,
         tipo: templateSelecionado,
         whats: whatsNormalizado,
-        data: {
-          nome: destinatario.nome,
-          ...dadosCobranca,
-        }
+        data: dataComAliases,
       };
 
       // Adicionar assinante_id se contexto for "assinante"
@@ -162,10 +173,19 @@ export default function ModalEnviarWhatsApp({
     // Substituir placeholders com dados disponíveis
     let mensagem = template.template_markdown;
     
-    // Dados disponíveis para substituição
-    const dados = {
+    // Dados base disponíveis para substituição
+    const dadosBase = {
       nome: destinatario.nome,
       ...dadosCobranca,
+    };
+    
+    // Adicionar aliases para garantir compatibilidade com placeholders variados
+    const dados = {
+      ...dadosBase,
+      // Alias 'aluno' para templates que usam {{aluno}} ao invés de {{nome}}
+      aluno: dadosBase.nome || (dadosCobranca as any)?.cliente_nome || destinatario.nome,
+      // Alias 'descrição' (com acento) para templates que usam acento
+      'descrição': (dadosCobranca as any)?.descricao || '',
     };
 
     // Substituir cada placeholder (formato: {{campo}})
