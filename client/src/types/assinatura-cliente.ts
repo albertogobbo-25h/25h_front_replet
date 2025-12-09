@@ -8,6 +8,7 @@ export interface PlanoCliente {
   tipo: 'VALOR_FIXO' | 'PACOTE' | 'VALOR_VARIAVEL';
   valor_mensal: number;
   periodicidade: Periodicidade;
+  ativo: boolean;
 }
 
 export interface ClienteResumoAssinatura {
@@ -16,6 +17,7 @@ export interface ClienteResumoAssinatura {
   nome_visualizacao: string | null;
   cpf_cnpj: string | null;
   whatsapp: string | null;
+  email?: string;
 }
 
 export interface AssinaturaCliente {
