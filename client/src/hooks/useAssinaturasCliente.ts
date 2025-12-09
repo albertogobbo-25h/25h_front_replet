@@ -189,3 +189,21 @@ export function useReativarAssinaturaCliente() {
     },
   });
 }
+
+export function useObterAssinaturaCliente(assinaturaId: string | null) {
+  return useQuery({
+    queryKey: [ASSINATURAS_CLIENTE_QUERY_KEY, "detalhe", assinaturaId],
+    queryFn: async () => {
+      if (!assinaturaId) return null;
+      
+      const result = await callSupabase<AssinaturaCliente>(
+        async () =>
+          await supabase.rpc("obter_assinatura_cliente", {
+            p_assinatura_id: assinaturaId,
+          })
+      );
+      return result;
+    },
+    enabled: !!assinaturaId,
+  });
+}

@@ -50,6 +50,7 @@ function getStatusBadge(status: AssinaturaClienteStatus) {
     SUSPENSA: { label: "Suspensa", variant: "secondary" },
     CANCELADA: { label: "Cancelada", variant: "destructive" },
     AGUARDANDO_PAGAMENTO: { label: "Aguardando Pagamento", variant: "outline" },
+    CANCELAMENTO_SOLICITADO: { label: "Cancelamento Solicitado", variant: "outline" },
   };
 
   const config = statusConfig[status] || { label: status, variant: "outline" as const };
@@ -186,8 +187,8 @@ export default function AssinaturasClientes() {
                         ? formatCurrency(assinatura.plano.valor_mensal)
                         : "-"}
                     </TableCell>
-                    <TableCell>{formatDate(assinatura.data_inicio)}</TableCell>
-                    <TableCell>{formatDate(assinatura.data_proximo_vencimento)}</TableCell>
+                    <TableCell>{formatDate(assinatura.inicio || assinatura.data_inicio || null)}</TableCell>
+                    <TableCell>{formatDate(assinatura.data_proximo_vencimento || assinatura.fim || null)}</TableCell>
                     <TableCell>{getStatusBadge(assinatura.status)}</TableCell>
                     <TableCell>
                       <DropdownMenu>

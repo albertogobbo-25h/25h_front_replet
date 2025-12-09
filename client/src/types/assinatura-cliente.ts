@@ -1,4 +1,4 @@
-export type AssinaturaClienteStatus = 'ATIVA' | 'SUSPENSA' | 'CANCELADA' | 'AGUARDANDO_PAGAMENTO';
+export type AssinaturaClienteStatus = 'ATIVA' | 'SUSPENSA' | 'CANCELADA' | 'AGUARDANDO_PAGAMENTO' | 'CANCELAMENTO_SOLICITADO';
 export type Periodicidade = 'MENSAL' | 'TRIMESTRAL' | 'SEMESTRAL' | 'ANUAL' | 'AVULSO';
 
 export interface PlanoCliente {
@@ -24,14 +24,20 @@ export interface AssinaturaCliente {
   cliente_id: string;
   cliente_plano_id: string;
   status: AssinaturaClienteStatus;
-  data_inicio: string;
-  data_proximo_vencimento: string | null;
+  inicio: string;
+  fim: string | null;
+  saldo_atendimentos: number;
+  saldo_monetario: number;
+  meio_pagamento: string | null;
   data_cancelamento: string | null;
   observacao: string | null;
   criado_em: string;
   modificado_em: string | null;
   cliente?: ClienteResumoAssinatura;
   plano?: PlanoCliente;
+  // Aliases para compatibilidade
+  data_inicio?: string;
+  data_proximo_vencimento?: string | null;
 }
 
 export interface ListarAssinaturasClienteParams {

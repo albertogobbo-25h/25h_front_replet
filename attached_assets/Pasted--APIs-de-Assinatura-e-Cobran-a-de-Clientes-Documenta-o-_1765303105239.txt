@@ -1,0 +1,599 @@
+# APIs de Assinatura e Cobrança de Clientes
+
+> Documentação para frontend consumir os serviços públicos de gestão de assinaturas e cobranças de clientes finais.
+
+---
+
+## 📋 Visão Geral
+
+Estas APIs permitem ao **assinante logado** gerenciar assinaturas e cobranças dos seus clientes finais.
+
+**Requisitos:**
+- Usuário autenticado (`authenticated`)
+- Token JWT válido via `supabase.auth`
+
+---
+
+## 🔐 Autenticação
+
+Todas as chamadas requerem autenticação:
+
+```typescript
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+// Login
+const { data, error } = await supabase.auth.signInWithPassword({
+  email: 'usuario@email.com',
+  password: 'senha'
+})
+```
+
+---
+
+## 📦 Padrão de Resposta
+
+Todas as funções retornam JSON no formato:
+
+```typescript
+interface ApiResponse<T> {
+  status: 'OK' | 'ERROR' | 'WARNING'
+  message: string
+  code?: string      // Apenas em erros
+  data?: T           // Dados da resposta
+}
+```
+
+### Exemplo de tratamento:
+
+```typescript
+const { data: result, error } = await supabase.rpc('nome_funcao', params)
+
+if (error) {
+  // Erro de rede/conexão
+  console.error('Erro de conexão:', error.message)
+  return
+}
+
+if (result?.status === 'ERROR') {
+  // Erro de negócio
+  console.error(`[${result.code}] ${result.message}`)
+  return
+}
+
+if (result?.status === 'WARNING') {
+  // Aviso que requer ação (ex: duplicação)
+  console.warn(result.message)
+  // Mostrar modal de confirmação
+  return
+}
+
+// Sucesso
+console.log(result.data)
+```
+
+---
+
+## 📝 APIs de Assinatura
+
+### 1. Criar Assinatura + Primeira Cobrança
+
+Cria assinatura e primeira cobrança atomicamente.
+
+```typescript
+const { data, error } = await supabase.rpc('criar_assinatura_cliente', {
+  p_cliente_id: 'uuid-do-cliente',
+  p_cliente_plano_id: 'uuid-do-plano',
+  p_inicio: '2025-01-01',                           // Opcional (default: hoje)
+  p_data_vencimento_primeira_cobranca: '2025-01-08' // Opcional (default: inicio + 7 dias)
+})
+```
+
+**Resposta sucesso:**
+```json
+{
+  "status": "OK",
+  "message": "Assinatura criada com sucesso.",
+  "data": {
+    "assinatura_id": "uuid",
+    "cobranca_id": "uuid",
+    "valor_primeira_cobranca": 150.00,
+    "data_vencimento_primeira_cobranca": "2025-01-08"
+  }
+}
+```
+
+**Resposta duplicação (WARNING):**
+```json
+{
+  "status": "WARNING",
+  "code": "ASSINATURA_DUPLICADA",
+  "message": "Cliente já possui assinatura ativa deste plano...",
+  "data": {
+    "assinatura_existente_id": "uuid"
+  }
+}
+```
+
+**Códigos de erro:**
+| Código | Descrição |
+|--------|-----------|
+| `CLIENTE_NAO_ENCONTRADO` | Cliente não existe |
+| `CLIENTE_NAO_PERTENCE_ASSINANTE` | Cliente de outro assinante |
+| `PLANO_NAO_ENCONTRADO` | Plano não existe |
+| `PLANO_INATIVO` | Plano desativado |
+| `ASSINATURA_DUPLICADA` | Já existe assinatura ativa do plano |
+
+---
+
+### 2. Listar Assinaturas
+
+Lista assinaturas com filtros e paginação.
+
+```typescript
+const { data, error } = await supabase.rpc('listar_assinaturas_cliente', {
+  p_cliente_id: 'uuid-do-cliente',  // Opcional
+  p_status: 'ATIVA',                // Opcional: ATIVA, SUSPENSA, CANCELADA, etc.
+  p_limit: 20,                      // Opcional (default: 100)
+  p_offset: 0                       // Opcional (default: 0)
+})
+```
+
+**Resposta:**
+```json
+{
+  "status": "OK",
+  "message": "Assinaturas listadas com sucesso.",
+  "data": {
+    "assinaturas": [
+      {
+        "id": "uuid",
+        "cliente_id": "uuid",
+        "cliente_plano_id": "uuid",
+        "status": "ATIVA",
+        "inicio": "2025-01-01",
+        "fim": null,
+        "saldo_atendimentos": 10,
+        "saldo_monetario": 0.00,
+        "meio_pagamento": null,
+        "data_cancelamento": null,
+        "observacao": null,
+        "criado_em": "2025-01-01T10:00:00Z",
+        "cliente": {
+          "nome": "João Silva",
+          "nome_visualizacao": "João",
+          "whatsapp": "11999999999",
+          "cpf_cnpj": "12345678900"
+        },
+        "plano": {
+          "nome": "Plano Mensal",
+          "descricao": "Plano básico mensal",
+          "tipo": "VALOR_FIXO",
+          "valor_mensal": 150.00,
+          "periodicidade": "MENSAL",
+          "ativo": true
+        }
+      }
+    ],
+    "total": 15,
+    "limit": 20,
+    "offset": 0
+  }
+}
+```
+
+**Status de assinatura (enum_status_assinatura):**
+- `ATIVA` - Assinatura ativa
+- `SUSPENSA` - Suspensa por inadimplência
+- `CANCELADA` - Cancelada manualmente
+- `AGUARDANDO_PAGAMENTO` - Aguardando primeiro pagamento
+- `CANCELAMENTO_SOLICITADO` - Cancelamento em andamento
+
+---
+
+### 3. Obter Detalhes da Assinatura
+
+Retorna detalhes completos com dados de cliente e plano.
+
+```typescript
+const { data, error } = await supabase.rpc('obter_assinatura_cliente', {
+  p_assinatura_id: 'uuid-da-assinatura'
+})
+```
+
+**Resposta:**
+```json
+{
+  "status": "OK",
+  "message": "Assinatura obtida com sucesso.",
+  "data": {
+    "id": "uuid",
+    "assinante_id": "uuid",
+    "cliente_id": "uuid",
+    "cliente_plano_id": "uuid",
+    "status": "ATIVA",
+    "inicio": "2025-01-01",
+    "fim": null,
+    "saldo_atendimentos": 10,
+    "saldo_monetario": 0.00,
+    "meio_pagamento": null,
+    "data_cancelamento": null,
+    "observacao": null,
+    "criado_em": "2025-01-01T10:00:00Z",
+    "modificado_em": "2025-01-01T10:00:00Z",
+    "cliente": {
+      "id": "uuid",
+      "nome": "João Silva",
+      "nome_visualizacao": "João",
+      "whatsapp": "11999999999",
+      "cpf_cnpj": "12345678900",
+      "email": "joao@email.com"
+    },
+    "plano": {
+      "id": "uuid",
+      "nome": "Plano Mensal",
+      "descricao": "Plano básico mensal",
+      "tipo": "VALOR_FIXO",
+      "valor_mensal": 150.00,
+      "periodicidade": "MENSAL",
+      "ativo": true
+    }
+  }
+}
+```
+
+---
+
+### 4. Cancelar Assinatura
+
+Cancela uma assinatura ativa.
+
+```typescript
+const { data, error } = await supabase.rpc('cancelar_assinatura_cliente', {
+  p_assinatura_id: 'uuid-da-assinatura',
+  p_observacao: 'Motivo do cancelamento'  // Opcional
+})
+```
+
+**Resposta:**
+```json
+{
+  "status": "OK",
+  "message": "Assinatura cancelada com sucesso.",
+  "data": {
+    "assinatura_id": "uuid",
+    "status": "CANCELADA",
+    "data_cancelamento": "2025-01-15"
+  }
+}
+```
+
+**Códigos de erro:**
+| Código | Descrição |
+|--------|-----------|
+| `ASSINATURA_NAO_ENCONTRADA` | Assinatura não existe |
+| `ASSINATURA_JA_CANCELADA` | Já está cancelada |
+
+---
+
+## 💰 APIs de Cobrança
+
+### 1. Criar Cobrança Extra (Avulsa)
+
+Cria cobrança avulsa vinculada a uma assinatura.
+
+```typescript
+const { data, error } = await supabase.rpc('criar_cobranca_extra', {
+  p_cliente_id: 'uuid-do-cliente',
+  p_cliente_assinatura_id: 'uuid-da-assinatura',
+  p_descricao: 'Taxa de material',
+  p_valor_total: 50.00,
+  p_data_vencimento: '2025-01-15',
+  p_observacao: 'Cobrança adicional'  // Opcional
+})
+```
+
+**Resposta:**
+```json
+{
+  "status": "OK",
+  "message": "Cobrança extra criada com sucesso.",
+  "data": {
+    "cobranca_id": "uuid",
+    "valor_total": 50.00,
+    "data_vencimento": "2025-01-15"
+  }
+}
+```
+
+---
+
+### 2. Listar Cobranças
+
+Lista cobranças com filtros avançados.
+
+```typescript
+const { data, error } = await supabase.rpc('listar_cobrancas_cliente', {
+  p_cliente_id: 'uuid',               // Opcional
+  p_cliente_assinatura_id: 'uuid',    // Opcional
+  p_status_pagamento: 'EM_ABERTO',    // Opcional: EM_ABERTO, PAGO, CANCELADO, FALHOU
+  p_data_vencimento_inicio: '2025-01-01',  // Opcional
+  p_data_vencimento_fim: '2025-01-31',     // Opcional
+  p_limit: 50,
+  p_offset: 0
+})
+```
+
+**Resposta:**
+```json
+{
+  "status": "OK",
+  "message": "Cobranças listadas com sucesso.",
+  "data": {
+    "cobrancas": [
+      {
+        "id": "uuid",
+        "cliente_id": "uuid",
+        "cliente_assinatura_id": "uuid",
+        "descricao": "Plano Mensal - Janeiro",
+        "valor_total": 150.00,
+        "data_vencimento": "2025-01-08",
+        "status_pagamento": "EM_ABERTO",
+        "data_emissao": "2025-01-01",
+        "meio_pagamento": null,
+        "dthr_pagamento": null,
+        "link_pagamento": "https://app.25h.com.br/publico/pagar/uuid",
+        "observacao": null,
+        "criado_em": "2025-01-01T10:00:00Z",
+        "cliente": {
+          "nome": "João Silva",
+          "nome_visualizacao": "João",
+          "whatsapp": "11999999999",
+          "cpf_cnpj": "12345678900"
+        },
+        "assinatura": {
+          "status": "ATIVA"
+        },
+        "plano": {
+          "nome": "Plano Mensal",
+          "tipo": "VALOR_FIXO",
+          "valor_mensal": 150.00
+        }
+      }
+    ],
+    "total": 5,
+    "limit": 50,
+    "offset": 0
+  }
+}
+```
+
+**Status de cobrança (enum_status_cobranca):**
+- `EM_ABERTO` - Aguardando pagamento
+- `PAGO` - Pago
+- `CANCELADO` - Cancelado
+- `FALHOU` - Falha no processamento
+
+---
+
+### 3. Obter Detalhes da Cobrança
+
+Retorna detalhes completos com JOINs.
+
+```typescript
+const { data, error } = await supabase.rpc('obter_cobranca', {
+  p_cobranca_id: 'uuid-da-cobranca'
+})
+```
+
+**Resposta:**
+```json
+{
+  "status": "OK",
+  "message": "Cobrança obtida com sucesso.",
+  "data": {
+    "id": "uuid",
+    "assinante_id": "uuid",
+    "cliente_id": "uuid",
+    "cliente_assinatura_id": "uuid",
+    "cliente_plano_id": "uuid",
+    "descricao": "Plano Mensal - Janeiro",
+    "valor_total": 150.00,
+    "data_vencimento": "2025-01-08",
+    "status_pagamento": "EM_ABERTO",
+    "data_emissao": "2025-01-01",
+    "link_pagamento": null,
+    "meio_pagamento": null,
+    "dthr_pagamento": null,
+    "observacao": null,
+    "criado_em": "2025-01-01T10:00:00Z",
+    "modificado_em": "2025-01-01T10:00:00Z",
+    "cliente": {
+      "id": "uuid",
+      "nome": "João Silva",
+      "nome_visualizacao": "João",
+      "whatsapp": "11999999999",
+      "cpf_cnpj": "12345678900",
+      "email": "joao@email.com"
+    },
+    "assinatura": {
+      "id": "uuid",
+      "status": "ATIVA",
+      "inicio": "2025-01-01",
+      "fim": null
+    },
+    "plano": {
+      "id": "uuid",
+      "nome": "Plano Mensal",
+      "descricao": "Plano básico mensal",
+      "tipo": "VALOR_FIXO",
+      "valor_mensal": 150.00,
+      "periodicidade": "MENSAL"
+    }
+  }
+}
+```
+
+---
+
+### 4. Cancelar Cobrança
+
+Cancela uma cobrança em aberto.
+
+```typescript
+const { data, error } = await supabase.rpc('cancelar_cobranca', {
+  p_cobranca_id: 'uuid-da-cobranca',
+  p_observacao: 'Motivo do cancelamento'  // Opcional
+})
+```
+
+**Resposta:**
+```json
+{
+  "status": "OK",
+  "message": "Cobrança cancelada com sucesso.",
+  "data": {
+    "cobranca_id": "uuid",
+    "status_pagamento": "CANCELADO"
+  }
+}
+```
+
+**Códigos de erro:**
+| Código | Descrição |
+|--------|-----------|
+| `COBRANCA_JA_PAGA` | Não pode cancelar cobrança paga |
+| `COBRANCA_JA_CANCELADA` | Já está cancelada |
+
+---
+
+### 5. Marcar Cobrança como Paga (Manual)
+
+Para pagamentos realizados fora da plataforma.
+
+```typescript
+const { data, error } = await supabase.rpc('marcar_cobranca_pago', {
+  p_cobranca_id: 'uuid-da-cobranca',
+  p_meio_pagamento: 'MANUAL',           // MANUAL, OPF_PIX_IMEDIATO, OPF_PIX_AUTOMATICO
+  p_dthr_pagamento: '2025-01-10T14:30:00Z',  // Opcional (default: agora)
+  p_observacao: 'Pagamento em dinheiro'      // Opcional
+})
+```
+
+**Resposta:**
+```json
+{
+  "status": "OK",
+  "message": "Cobrança marcada como paga com sucesso.",
+  "data": {
+    "cobranca_id": "uuid",
+    "status_pagamento": "PAGO",
+    "meio_pagamento": "MANUAL",
+    "dthr_pagamento": "2025-01-10T14:30:00Z"
+  }
+}
+```
+
+**Meios de pagamento (enum_meio_pagamento):**
+- `MANUAL` - Pagamento fora da plataforma (dinheiro, transferência, etc.)
+- `OPF_PIX_IMEDIATO` - PIX imediato via Open Finance
+- `OPF_PIX_AUTOMATICO` - PIX automático via Open Finance
+
+---
+
+### 6. Gerar Link de Pagamento
+
+Gera URL pública para pagamento.
+
+```typescript
+const { data, error } = await supabase.rpc('gerar_link_pagamento', {
+  p_cobranca_id: 'uuid-da-cobranca'
+})
+```
+
+**Resposta:**
+```json
+{
+  "status": "OK",
+  "message": "Link de pagamento gerado com sucesso.",
+  "data": {
+    "cobranca_id": "uuid",
+    "link_pagamento": "https://app.25h.com.br/publico/pagar/uuid",
+    "valor_total": 150.00,
+    "data_vencimento": "2025-01-08"
+  }
+}
+```
+
+> **Nota:** Este link é uma URL estática. O link de pagamento real (via gateway Pluggy) será gerado na Edge Function `processar_pagamento_cliente` (em desenvolvimento).
+
+---
+
+## 🔧 Exemplo Completo (React/Next.js)
+
+```typescript
+// hooks/useAssinaturas.ts
+import { supabase } from '@/lib/supabase'
+
+export function useAssinaturas() {
+  
+  async function criarAssinatura(clienteId: string, planoId: string) {
+    const { data, error } = await supabase.rpc('criar_assinatura_cliente', {
+      p_cliente_id: clienteId,
+      p_cliente_plano_id: planoId
+    })
+
+    if (error) throw new Error(error.message)
+    if (data?.status === 'ERROR') throw new Error(data.message)
+    if (data?.status === 'WARNING') {
+      return { warning: true, data: data.data, message: data.message }
+    }
+    
+    return { success: true, data: data.data }
+  }
+
+  async function listarAssinaturas(clienteId?: string, status?: string) {
+    const { data, error } = await supabase.rpc('listar_assinaturas_cliente', {
+      p_cliente_id: clienteId,
+      p_status: status
+    })
+
+    if (error) throw new Error(error.message)
+    if (data?.status === 'ERROR') throw new Error(data.message)
+    
+    return data.data.assinaturas
+  }
+
+  async function cancelarAssinatura(assinaturaId: string, motivo?: string) {
+    const { data, error } = await supabase.rpc('cancelar_assinatura_cliente', {
+      p_assinatura_id: assinaturaId,
+      p_observacao: motivo
+    })
+
+    if (error) throw new Error(error.message)
+    if (data?.status === 'ERROR') throw new Error(data.message)
+    
+    return data.data
+  }
+
+  return { criarAssinatura, listarAssinaturas, cancelarAssinatura }
+}
+```
+
+---
+
+## ⚠️ Notas Importantes
+
+1. **Transação Atômica:** `criar_assinatura_cliente` cria assinatura + cobrança juntas. Se uma falhar, ambas são desfeitas.
+
+2. **Duplicação de Assinatura:** O sistema avisa quando cliente já tem assinatura ativa do mesmo plano. Use a flag de confirmação na API pública (em desenvolvimento).
+
+3. **Cancelamentos com Gateway:** Quando houver PIX agendado na Pluggy, o cancelamento precisará chamar Edge Function para cancelar no gateway primeiro (em desenvolvimento).
+
+4. **Link de Pagamento Real:** O `gerar_link_pagamento` atual gera URL estática. O fluxo real de pagamento via Pluggy será implementado na Edge Function `processar_pagamento_cliente`.
+
+---
+
+**Última Atualização:** Dezembro 2025
+

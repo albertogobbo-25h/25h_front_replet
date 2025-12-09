@@ -99,12 +99,16 @@ export default function ModalEnviarWhatsApp({
       };
       
       // Adicionar aliases para garantir compatibilidade com placeholders variados
+      // Usar normalização NFC para garantir encoding consistente com a Edge Function
+      const descricaoValue = (dadosCobranca as any)?.descricao || '';
       const dataComAliases = {
         ...baseData,
         // Alias 'aluno' para templates que usam {{aluno}} ao invés de {{nome}}
         aluno: baseData.nome || (dadosCobranca as any)?.cliente_nome || destinatario.nome,
-        // Alias 'descrição' (com acento) para templates que usam acento
-        'descrição': (dadosCobranca as any)?.descricao || '',
+        // Alias 'descrição' (com acento) - normalizado para NFC
+        'descrição': descricaoValue.normalize?.('NFC') || descricaoValue,
+        // Também enviar versão NFD para máxima compatibilidade
+        'descricao': descricaoValue,
       };
 
       const payload: any = {
@@ -180,12 +184,15 @@ export default function ModalEnviarWhatsApp({
     };
     
     // Adicionar aliases para garantir compatibilidade com placeholders variados
+    const descricaoValue = (dadosCobranca as any)?.descricao || '';
     const dados = {
       ...dadosBase,
       // Alias 'aluno' para templates que usam {{aluno}} ao invés de {{nome}}
       aluno: dadosBase.nome || (dadosCobranca as any)?.cliente_nome || destinatario.nome,
-      // Alias 'descrição' (com acento) para templates que usam acento
-      'descrição': (dadosCobranca as any)?.descricao || '',
+      // Alias 'descrição' (com acento) - normalizado para NFC
+      'descrição': descricaoValue.normalize?.('NFC') || descricaoValue,
+      // Também manter versão sem acento
+      'descricao': descricaoValue,
     };
 
     // Substituir cada placeholder (formato: {{campo}})
