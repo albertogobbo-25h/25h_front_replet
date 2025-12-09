@@ -1,0 +1,211 @@
+### 5. Listar Clientes (com Paginação)
+
+**Função:** `listar_clientes(filtros?)`  
+**Uso:** Listar clientes com filtros e paginação  
+**Requer:** 🔐 Usuário autenticado
+
+#### Parâmetros (Todos opcionais)
+
+| Campo | Tipo | Default | Descrição |
+|-------|------|---------|-----------|
+| `p_nome` | `TEXT` | `null` | Filtrar por nome (busca parcial) |
+| `p_cpf_cnpj` | `VARCHAR(14)` | `null` | Filtrar por CPF/CNPJ |
+| `p_email` | `TEXT` | `null` | Filtrar por email |
+| `p_whatsapp` | `TEXT` | `null` | Filtrar por WhatsApp |
+| `p_ind_ativo` | `BOOLEAN` | `null` | Filtrar por status (true/false/null=todos) |
+| `p_limit` | `INTEGER` | `100` | Máximo de registros (máx: 1000) |
+| `p_offset` | `INTEGER` | `0` | Paginação - início |
+
+#### Response
+
+Retorna **array de clientes** diretamente (não é JSONB):
+
+```typescript
+[
+  {
+    id: "uuid",
+    nome: "João Silva",
+    nome_visualizacao: "João",
+    whatsapp: "5511999999999",
+    cpf_cnpj: "12345678900",
+    tipo_pessoa: "FISICA",
+    email: "joao@email.com",
+    // ... todos os campos
+    ind_ativo: true,
+    criado_em: "2024-01-01T00:00:00Z",
+    modificado_em: "2024-01-01T00:00:00Z"
+  },
+  // ... mais clientes
+]
+```
+
+#### Exemplo TypeScript
+
+```typescript
+interface ListarClientesInput {
+  nome?: string
+  cpf_cnpj?: string
+  email?: string
+  whatsapp?: string
+  ind_ativo?: boolean
+  limit?: number
+  offset?: number
+}
+
+async function listarClientes(filtros?: ListarClientesInput) {
+  const { data, error } = await supabase.rpc('listar_clientes', {
+    p_nome: filtros?.nome,
+    p_cpf_cnpj: filtros?.cpf_cnpj,
+    p_email: filtros?.email,
+    p_whatsapp: filtros?.whatsapp,
+    p_ind_ativo: filtros?.ind_ativo,
+    p_limit: filtros?.limit ?? 100,
+    p_offset: filtros?.offset ?? 0
+  })
+
+  if (error) {
+    console.error('Erro ao listar clientes:', error)
+    return { sucesso: false, erro: error.message, clientes: [] }
+  }
+
+  return {
+    sucesso: true,
+    clientes: data || []
+  }
+}
+```
+
+#### Exemplo React Component com Paginação
+
+```tsx
+'use client'
+
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+interface Cliente {
+  id: string
+  nome: string
+  whatsapp: string
+  email: string
+  ind_ativo: boolean
+}
+
+export function ListaClientes() {
+  const [clientes, setClientes] = useState<Cliente[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filtros, setFiltros] = useState({
+    nome: '',
+    ind_ativo: undefined as boolean | undefined,
+    limit: 50,
+    offset: 0
+  })
+
+  useEffect(() => {
+    carregarClientes()
+  }, [filtros])
+
+  async function carregarClientes() {
+    setLoading(true)
+
+    const { data, error } = await supabase.rpc('listar_clientes', {
+      p_nome: filtros.nome || null,
+      p_ind_ativo: filtros.ind_ativo ?? null,
+      p_limit: filtros.limit,
+      p_offset: filtros.offset
+    })
+
+    setLoading(false)
+
+    if (!error) {
+      setClientes(data || [])
+    }
+  }
+
+  function proximaPagina() {
+    setFiltros(prev => ({ ...prev, offset: prev.offset + prev.limit }))
+  }
+
+  function paginaAnterior() {
+    setFiltros(prev => ({ ...prev, offset: Math.max(0, prev.offset - prev.limit) }))
+  }
+
+  if (loading) return <p>Carregando...</p>
+
+  return (
+    <div>
+      {/* Filtros */}
+      <div className="mb-4 flex gap-4">
+        <input
+          type="text"
+          placeholder="Buscar por nome..."
+          value={filtros.nome}
+          onChange={(e) => setFiltros(prev => ({ ...prev, nome: e.target.value, offset: 0 }))}
+          className="border rounded px-3 py-2"
+        />
+
+        <select
+          value={filtros.ind_ativo === undefined ? '' : filtros.ind_ativo.toString()}
+          onChange={(e) => setFiltros(prev => ({
+            ...prev,
+            ind_ativo: e.target.value === '' ? undefined : e.target.value === 'true',
+            offset: 0
+          }))}
+          className="border rounded px-3 py-2"
+        >
+          <option value="">Todos</option>
+          <option value="true">Ativos</option>
+          <option value="false">Inativos</option>
+        </select>
+      </div>
+
+      {/* Lista */}
+      <div className="space-y-2">
+        {clientes.map(cliente => (
+          <div key={cliente.id} className="card border rounded p-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="font-semibold">{cliente.nome}</h3>
+                <p className="text-sm text-gray-600">
+                  {cliente.whatsapp && `📱 ${cliente.whatsapp}`}
+                  {cliente.email && ` | 📧 ${cliente.email}`}
+                </p>
+              </div>
+              <div>
+                {cliente.ind_ativo ? (
+                  <span className="badge badge-success">Ativo</span>
+                ) : (
+                  <span className="badge badge-secondary">Inativo</span>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Paginação */}
+      <div className="mt-4 flex justify-between items-center">
+        <button
+          onClick={paginaAnterior}
+          disabled={filtros.offset === 0}
+          className="btn btn-outline"
+        >
+          Anterior
+        </button>
+
+        <span className="text-sm text-gray-600">
+          Exibindo {filtros.offset + 1} - {filtros.offset + clientes.length}
+        </span>
+
+        <button
+          onClick={proximaPagina}
+          disabled={clientes.length < filtros.limit}
+          className="btn btn-outline"
+        >
+          Próxima
+        </button>
+      </div>
+    </div>
+  )
+}
+```
