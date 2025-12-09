@@ -53,27 +53,33 @@ export default function Cobrancas() {
   const getDateRange = () => {
     const hoje = new Date();
     let dataInicio = new Date();
+    let dataFim = new Date();
 
     switch (periodoFilter) {
       case 'mes_atual':
         dataInicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        dataFim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
         break;
       case '3_meses':
         dataInicio.setMonth(hoje.getMonth() - 3);
+        dataFim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
         break;
       case '6_meses':
         dataInicio.setMonth(hoje.getMonth() - 6);
+        dataFim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
         break;
       case '12_meses':
         dataInicio.setMonth(hoje.getMonth() - 12);
+        dataFim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
         break;
       default:
         dataInicio.setMonth(hoje.getMonth() - 1);
+        dataFim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
     }
 
     return {
       dataInicio: dataInicio.toISOString().split('T')[0],
-      dataFim: hoje.toISOString().split('T')[0],
+      dataFim: dataFim.toISOString().split('T')[0],
     };
   };
 
