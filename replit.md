@@ -22,6 +22,7 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 - **Data Management**: Supabase PostgreSQL with multi-tenancy (app_data schema) and RLS policies for tenant isolation. All queries use `.schema('app_data')`.
 - **API Response Pattern**: Unified helper `callSupabase()` for RPC/Edge Functions with consistent error handling (`ApiError`) and `{status, message, data}` format.
 - **Masks**: Brazilian masks for WhatsApp, CNPJ, CEP.
+- **CEP Autocomplete**: Uses ViaCEP API (`client/src/lib/cep.ts`) for address lookup. Implements debounce and race condition protection via useRef to prevent stale responses from overwriting user input.
 - **Testing**: `data-testid` attributes used for E2E testing with Playwright.
 - **Logout Security**: Complete cache clearing and state/localStorage cleanup.
 
@@ -36,6 +37,7 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 - **WhatsApp Integration**: Send messages via Edge Function, template selection modal, automatic placeholder filling.
 - **Admin Panel**: Protected routes for ADMIN role, dashboard, assinantes, and planos management.
 - **Public Payment Page**: Unauthenticated page for clients to view charge details and select payment method (PIX Automático or PIX Imediato).
+- **Public Subscription Page**: Unauthenticated page for clients to subscribe to plans. Features CEP autocomplete via ViaCEP API with debounced search. Address is mandatory for paid plans (valor_mensal > 0). Race condition protection ensures stale API responses don't overwrite user edits.
 - **Subscription Management Flow**: Two tabs (Plano Atual, Histórico) with auto-polling, actions for plan changes, cancellation, renewal, and enforced business rules for subscription states and validity.
 - **Profile**: Integration with Supabase RPCs for viewing/updating subscriber data (CNPJ-only validation, full address), including a **Bank Account (Recebedor)** section.
 - **Bank Account Management (Recebedor)**: Complete flow for configuring bank accounts, including bank selection via ComboboxBanco, validation, and interception of client/charge creation until configured.

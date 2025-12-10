@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { buscarCep } from "@/lib/cep";
@@ -86,6 +86,8 @@ export default function AssinarPublico() {
   const [showDuplicadoDialog, setShowDuplicadoDialog] = useState(false);
   const [sucesso, setSucesso] = useState(false);
   const [linkPagamento, setLinkPagamento] = useState<string | null>(null);
+
+  const cepAtualRef = useRef<string>('');
 
   const [formData, setFormData] = useState<DadosClienteAssinatura>({
     nome: '',
@@ -214,11 +216,16 @@ export default function AssinarPublico() {
         return;
       }
 
+      cepAtualRef.current = cepLimpo;
       setBuscandoCep(true);
       setCepInvalido(false);
       
       try {
         const endereco = await buscarCep(cepLimpo);
+        
+        if (cepAtualRef.current !== cepLimpo) {
+          return;
+        }
         
         if (endereco) {
           setFormData(prev => ({
@@ -237,9 +244,13 @@ export default function AssinarPublico() {
         }
       } catch (err) {
         console.error('Erro ao buscar CEP:', err);
-        setCepInvalido(true);
+        if (cepAtualRef.current === cepLimpo) {
+          setCepInvalido(true);
+        }
       } finally {
-        setBuscandoCep(false);
+        if (cepAtualRef.current === cepLimpo) {
+          setBuscandoCep(false);
+        }
       }
     }, 500),
     []
@@ -273,8 +284,10 @@ export default function AssinarPublico() {
     if (numeros.length === 8) {
       buscarEnderecoPorCep(numeros);
     } else {
+      cepAtualRef.current = '';
       setCepEncontrado(false);
       setCepInvalido(false);
+      setBuscandoCep(false);
     }
   };
 
