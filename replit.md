@@ -32,7 +32,7 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 - **Client Management**: Complete CRUD via Supabase RPCs, including validation, filtering, and WhatsApp message sending via template selection modal (Send button in actions column).
 - **Client Plans Management**: CRUD for service plans (VALOR_FIXO, PACOTE, VALOR_VARIAVEL).
 - **Client Subscriptions Management**: Complete CRUD for client subscriptions via Supabase RPCs. Includes listing with filters, create new subscription with client/plan selection (ModalNovaAssinatura), suspend, cancel, and reactivate actions. Handles API envelope pattern (OK/WARNING/ERROR) with duplicate subscription detection (ASSINATURA_DUPLICADA warning).
-- **Charge Management**: Complete CRUD for charges via Supabase RPCs, including standalone or linked to subscriptions, dynamic statuses, comprehensive filters, and actions (send via WhatsApp, mark paid, cancel, generate payment link).
+- **Charge Management**: Complete CRUD for charges via Supabase RPCs. Manual charge creation (ModalCobranca) is exclusively for standalone/avulsa charges not linked to subscriptions. Supports dynamic statuses, comprehensive filters, and actions (send via WhatsApp, mark paid, cancel, generate payment link).
 - **Templates WhatsApp**: Complete CRUD for WhatsApp message templates with markdown support, placeholder extraction, and real-time preview.
 - **WhatsApp Integration**: Send messages via Edge Function, template selection modal, automatic placeholder filling.
 - **Admin Panel**: Protected routes for ADMIN role, dashboard, assinantes, and planos management.

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
@@ -19,31 +19,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Info } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { callSupabase } from "@/lib/api-helper";
 import { useCriarCobrancaExtra } from "@/hooks/useCobrancas";
-import { format, addMonths } from "date-fns";
 
 interface ClienteSelect {
   id: string;
   nome: string;
   nome_visualizacao: string | null;
-}
-
-interface PlanoAssinatura {
-  nome: string;
-  descricao: string | null;
-  valor_mensal: number;
-  periodicidade: string;
-}
-
-interface ClienteAssinatura {
-  id: string;
-  status: string;
-  data_proximo_vencimento: string | null;
-  plano: PlanoAssinatura;
 }
 
 interface ModalCobrancaProps {
@@ -52,30 +35,19 @@ interface ModalCobrancaProps {
   onSuccess: () => void;
 }
 
-type TipoCobranca = 'assinatura' | 'avulsa';
-
 export default function ModalCobranca({
   open,
   onClose,
   onSuccess,
 }: ModalCobrancaProps) {
   const criarCobrancaMutation = useCriarCobrancaExtra();
-  const [tipoCobranca, setTipoCobranca] = useState<TipoCobranca>('avulsa');
   const [formData, setFormData] = useState({
     cliente_id: '',
-    cliente_assinatura_id: '',
     descricao: '',
     valor_total: '',
     data_vencimento: '',
     observacao: '',
   });
-  
-  const avulsaValuesRef = useRef({
-    descricao: '',
-    valor_total: '',
-    data_vencimento: '',
-  });
-  const prevClienteIdRef = useRef('');
 
   const { data: clientes = [] } = useQuery<ClienteSelect[]>({
     queryKey: ['/api/clientes-ativos'],
@@ -96,44 +68,13 @@ export default function ModalCobranca({
     enabled: open,
   });
 
-  const { data: assinaturas = [], isLoading: isLoadingAssinaturas } = useQuery<ClienteAssinatura[]>({
-    queryKey: ['/api/cliente-assinaturas', formData.cliente_id],
-    queryFn: async () => {
-      if (!formData.cliente_id) return [];
-      
-      const result = await callSupabase<{ assinaturas: ClienteAssinatura[] }>(async () =>
-        await supabase.rpc('listar_assinaturas_cliente', {
-          p_cliente_id: formData.cliente_id,
-          p_status: 'ATIVA',
-          p_limit: 50,
-          p_offset: 0,
-        })
-      );
-      
-      return result.assinaturas || [];
-    },
-    enabled: open && !!formData.cliente_id,
-  });
-
-  const assinaturaSelecionada = assinaturas.find(a => a.id === formData.cliente_assinatura_id);
-  const temAssinaturasDisponiveis = assinaturas.length > 0;
-
   useEffect(() => {
     if (open) {
       const defaultVencimento = new Date();
       defaultVencimento.setDate(defaultVencimento.getDate() + 10);
       
-      avulsaValuesRef.current = {
-        descricao: '',
-        valor_total: '',
-        data_vencimento: defaultVencimento.toISOString().split('T')[0],
-      };
-      prevClienteIdRef.current = '';
-      
-      setTipoCobranca('avulsa');
       setFormData({
         cliente_id: '',
-        cliente_assinatura_id: '',
         descricao: '',
         valor_total: '',
         data_vencimento: defaultVencimento.toISOString().split('T')[0],
@@ -141,74 +82,6 @@ export default function ModalCobranca({
       });
     }
   }, [open]);
-  
-  useEffect(() => {
-    if (formData.cliente_id && formData.cliente_id !== prevClienteIdRef.current) {
-      const defaultVencimento = new Date();
-      defaultVencimento.setDate(defaultVencimento.getDate() + 10);
-      
-      avulsaValuesRef.current = {
-        descricao: '',
-        valor_total: '',
-        data_vencimento: defaultVencimento.toISOString().split('T')[0],
-      };
-      
-      setFormData(prev => ({
-        ...prev,
-        cliente_assinatura_id: '',
-        descricao: '',
-        valor_total: '',
-        data_vencimento: defaultVencimento.toISOString().split('T')[0],
-      }));
-      setTipoCobranca('avulsa');
-    }
-    prevClienteIdRef.current = formData.cliente_id;
-  }, [formData.cliente_id]);
-
-  const handleTipoChange = (novoTipo: TipoCobranca) => {
-    if (novoTipo === tipoCobranca) return;
-    
-    if (novoTipo === 'assinatura') {
-      avulsaValuesRef.current = {
-        descricao: formData.descricao,
-        valor_total: formData.valor_total,
-        data_vencimento: formData.data_vencimento,
-      };
-    } else if (novoTipo === 'avulsa') {
-      setFormData(prev => ({
-        ...prev,
-        cliente_assinatura_id: '',
-        descricao: avulsaValuesRef.current.descricao,
-        valor_total: avulsaValuesRef.current.valor_total,
-        data_vencimento: avulsaValuesRef.current.data_vencimento,
-      }));
-    }
-    
-    setTipoCobranca(novoTipo);
-  };
-
-  useEffect(() => {
-    if (tipoCobranca === 'assinatura' && assinaturaSelecionada) {
-      const plano = assinaturaSelecionada.plano;
-      const mesAtual = format(new Date(), 'MMMM/yyyy');
-      
-      let proximoVencimento = assinaturaSelecionada.data_proximo_vencimento;
-      if (!proximoVencimento) {
-        proximoVencimento = addMonths(new Date(), 1).toISOString().split('T')[0];
-      }
-      
-      setFormData(prev => ({
-        ...prev,
-        descricao: `${plano.nome} - ${mesAtual}`,
-        valor_total: String(plano.valor_mensal),
-        data_vencimento: proximoVencimento.split('T')[0],
-      }));
-    }
-  }, [assinaturaSelecionada]);
-
-  const handleAssinaturaChange = (assinaturaId: string) => {
-    setFormData(prev => ({ ...prev, cliente_assinatura_id: assinaturaId }));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -216,9 +89,6 @@ export default function ModalCobranca({
     try {
       await criarCobrancaMutation.mutateAsync({
         p_cliente_id: formData.cliente_id,
-        p_cliente_assinatura_id: tipoCobranca === 'assinatura' && formData.cliente_assinatura_id 
-          ? formData.cliente_assinatura_id 
-          : undefined,
         p_descricao: formData.descricao,
         p_valor_total: parseFloat(formData.valor_total),
         p_data_vencimento: formData.data_vencimento,
@@ -232,27 +102,22 @@ export default function ModalCobranca({
   };
 
   const isFormValid = () => {
-    const baseValid = 
+    return (
       formData.cliente_id.trim() &&
       formData.descricao.trim() &&
       formData.valor_total.trim() &&
       parseFloat(formData.valor_total) > 0 &&
-      formData.data_vencimento.trim();
-    
-    if (tipoCobranca === 'assinatura') {
-      return baseValid && formData.cliente_assinatura_id.trim();
-    }
-    
-    return baseValid;
+      formData.data_vencimento.trim()
+    );
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Nova Cobrança</DialogTitle>
+          <DialogTitle>Nova Cobrança Avulsa</DialogTitle>
           <DialogDescription>
-            Crie uma cobrança vinculada a uma assinatura ou uma cobrança avulsa
+            Crie uma cobrança extra não vinculada a uma assinatura
           </DialogDescription>
         </DialogHeader>
 
@@ -281,71 +146,6 @@ export default function ModalCobranca({
               </Select>
             </div>
 
-            {formData.cliente_id && !isLoadingAssinaturas && (
-              <div className="space-y-2">
-                <Label>Tipo de Cobrança</Label>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant={tipoCobranca === 'avulsa' ? 'default' : 'outline'}
-                    className="flex-1"
-                    onClick={() => handleTipoChange('avulsa')}
-                    data-testid="button-tipo-avulsa"
-                  >
-                    Cobrança Avulsa
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={tipoCobranca === 'assinatura' ? 'default' : 'outline'}
-                    className="flex-1"
-                    onClick={() => handleTipoChange('assinatura')}
-                    disabled={!temAssinaturasDisponiveis}
-                    data-testid="button-tipo-assinatura"
-                  >
-                    Vincular Assinatura
-                  </Button>
-                </div>
-                {!temAssinaturasDisponiveis && (
-                  <p className="text-xs text-muted-foreground">
-                    Este cliente não possui assinaturas ativas
-                  </p>
-                )}
-              </div>
-            )}
-
-            {tipoCobranca === 'assinatura' && temAssinaturasDisponiveis && (
-              <div className="space-y-2">
-                <Label htmlFor="cliente_assinatura_id">
-                  Selecione a Assinatura <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                  value={formData.cliente_assinatura_id}
-                  onValueChange={handleAssinaturaChange}
-                >
-                  <SelectTrigger id="cliente_assinatura_id" data-testid="select-assinatura">
-                    <SelectValue placeholder="Selecione uma assinatura" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {assinaturas.map((assinatura) => (
-                      <SelectItem key={assinatura.id} value={assinatura.id}>
-                        {assinatura.plano?.nome || 'Assinatura'} - R$ {assinatura.plano?.valor_mensal?.toFixed(2) || '0.00'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {tipoCobranca === 'assinatura' && assinaturaSelecionada && (
-              <Alert>
-                <Info className="h-4 w-4" />
-                <AlertDescription>
-                  Os campos abaixo foram preenchidos automaticamente com base na assinatura selecionada. 
-                  Você pode ajustá-los se necessário.
-                </AlertDescription>
-              </Alert>
-            )}
-
             <div className="space-y-2">
               <Label htmlFor="descricao">
                 Descrição <span className="text-destructive">*</span>
@@ -356,10 +156,7 @@ export default function ModalCobranca({
                 onChange={(e) =>
                   setFormData({ ...formData, descricao: e.target.value })
                 }
-                placeholder={tipoCobranca === 'avulsa' 
-                  ? "Ex: Consulta Avulsa, Serviço Extra" 
-                  : "Ex: Mensalidade Janeiro/2024"
-                }
+                placeholder="Ex: Consulta Avulsa, Serviço Extra"
                 rows={2}
                 required
                 data-testid="textarea-descricao"
