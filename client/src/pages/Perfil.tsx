@@ -55,6 +55,7 @@ export default function Perfil() {
   const [buscandoCep, setBuscandoCep] = useState(false);
   const [cepEncontrado, setCepEncontrado] = useState(false);
   const [cepInvalido, setCepInvalido] = useState(false);
+  const [enderecoVeioDoAutoComplete, setEnderecoVeioDoAutoComplete] = useState(false);
   const cepAtualRef = useRef<string>('');
   
   const { recebedorAtivo, temRecebedorAtivo, loadingRecebedor, invalidarRecebedor } = useRecebedor();
@@ -99,9 +100,9 @@ export default function Perfil() {
         uf: dadosAssinante.uf || '',
         cep: formatCEP(dadosAssinante.cep || ''),
       });
-      if (dadosAssinante.cep && dadosAssinante.cep.length === 8) {
-        setCepEncontrado(true);
-      }
+      setCepEncontrado(false);
+      setCepInvalido(false);
+      setEnderecoVeioDoAutoComplete(false);
     }
   }, [dadosAssinante]);
 
@@ -129,22 +130,25 @@ export default function Perfil() {
         if (endereco) {
           setFormData(prev => ({
             ...prev,
-            rua: endereco.rua || prev.rua,
-            bairro: endereco.bairro || prev.bairro,
-            cidade: endereco.cidade || prev.cidade,
-            uf: endereco.uf || prev.uf,
-            complemento: endereco.complemento || prev.complemento,
+            rua: endereco.rua || '',
+            bairro: endereco.bairro || '',
+            cidade: endereco.cidade || '',
+            uf: endereco.uf || '',
+            complemento: endereco.complemento || '',
           }));
           setCepEncontrado(true);
           setCepInvalido(false);
+          setEnderecoVeioDoAutoComplete(true);
         } else {
           setCepEncontrado(false);
           setCepInvalido(true);
+          setEnderecoVeioDoAutoComplete(false);
         }
       } catch (err) {
         console.error('Erro ao buscar CEP:', err);
         if (cepAtualRef.current === cepLimpo) {
           setCepInvalido(true);
+          setEnderecoVeioDoAutoComplete(false);
         }
       } finally {
         if (cepAtualRef.current === cepLimpo) {
@@ -225,6 +229,12 @@ export default function Perfil() {
     atualizarDadosMutation.mutate();
   };
 
+  const handleAddressFieldChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setEnderecoVeioDoAutoComplete(false);
+    setCepEncontrado(false);
+  };
+
   const handleChange = (field: string, value: string) => {
     if (field === 'whatsapp') {
       setFormData(prev => ({ ...prev, [field]: formatWhatsApp(value) }));
@@ -242,6 +252,16 @@ export default function Perfil() {
         setCepEncontrado(false);
         setCepInvalido(false);
         setBuscandoCep(false);
+        setEnderecoVeioDoAutoComplete(false);
+        setFormData(prev => ({
+          ...prev,
+          cep: formatted,
+          rua: '',
+          bairro: '',
+          cidade: '',
+          uf: '',
+          complemento: '',
+        }));
       }
     } else {
       setFormData(prev => ({ ...prev, [field]: value }));
@@ -351,14 +371,14 @@ export default function Perfil() {
                 {buscandoCep && (
                   <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
                 )}
-                {cepEncontrado && !buscandoCep && (
+                {cepEncontrado && enderecoVeioDoAutoComplete && !buscandoCep && (
                   <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
                 )}
                 {cepInvalido && !buscandoCep && (
                   <XCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-destructive" />
                 )}
               </div>
-              {cepEncontrado && (
+              {cepEncontrado && enderecoVeioDoAutoComplete && (
                 <p className="text-xs text-green-600">Endereço encontrado! Campos preenchidos automaticamente.</p>
               )}
               {cepInvalido && (
@@ -372,7 +392,7 @@ export default function Perfil() {
                 <Input
                   id="rua"
                   value={formData.rua}
-                  onChange={(e) => handleChange('rua', e.target.value)}
+                  onChange={(e) => handleAddressFieldChange('rua', e.target.value)}
                   data-testid="input-rua"
                 />
               </div>
@@ -381,7 +401,7 @@ export default function Perfil() {
                 <Input
                   id="numero"
                   value={formData.numero}
-                  onChange={(e) => handleChange('numero', e.target.value)}
+                  onChange={(e) => handleAddressFieldChange('numero', e.target.value)}
                   data-testid="input-numero"
                 />
               </div>
@@ -392,7 +412,7 @@ export default function Perfil() {
                 <Input
                   id="complemento"
                   value={formData.complemento}
-                  onChange={(e) => handleChange('complemento', e.target.value)}
+                  onChange={(e) => handleAddressFieldChange('complemento', e.target.value)}
                   data-testid="input-complemento"
                 />
               </div>
@@ -401,7 +421,7 @@ export default function Perfil() {
                 <Input
                   id="bairro"
                   value={formData.bairro}
-                  onChange={(e) => handleChange('bairro', e.target.value)}
+                  onChange={(e) => handleAddressFieldChange('bairro', e.target.value)}
                   data-testid="input-bairro"
                 />
               </div>
@@ -412,7 +432,7 @@ export default function Perfil() {
                 <Input
                   id="cidade"
                   value={formData.cidade}
-                  onChange={(e) => handleChange('cidade', e.target.value)}
+                  onChange={(e) => handleAddressFieldChange('cidade', e.target.value)}
                   data-testid="input-cidade"
                 />
               </div>
@@ -420,7 +440,11 @@ export default function Perfil() {
                 <Label htmlFor="uf">UF</Label>
                 <Select
                   value={formData.uf}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, uf: value }))}
+                  onValueChange={(value) => {
+                    setFormData(prev => ({ ...prev, uf: value }));
+                    setEnderecoVeioDoAutoComplete(false);
+                    setCepEncontrado(false);
+                  }}
                 >
                   <SelectTrigger data-testid="select-uf">
                     <SelectValue placeholder="Selecione" />

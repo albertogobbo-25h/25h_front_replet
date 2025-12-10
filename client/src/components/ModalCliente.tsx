@@ -86,6 +86,7 @@ export default function ModalCliente({
   const [buscandoCep, setBuscandoCep] = useState(false);
   const [cepEncontrado, setCepEncontrado] = useState(false);
   const [cepInvalido, setCepInvalido] = useState(false);
+  const [enderecoVeioDoAutoComplete, setEnderecoVeioDoAutoComplete] = useState(false);
   const cepAtualRef = useRef<string>('');
 
   const isEdit = !!cliente;
@@ -115,14 +116,15 @@ export default function ModalCliente({
         observacao: cliente.observacao || '',
       });
       setCpfCnpjDuplicado(null);
-      if (cliente.cep && cliente.cep.length === 8) {
-        setCepEncontrado(true);
-      }
+      setCepEncontrado(false);
+      setCepInvalido(false);
+      setEnderecoVeioDoAutoComplete(false);
     } else if (open && !cliente) {
       setFormData(INITIAL_FORM_DATA);
       setCpfCnpjDuplicado(null);
       setCepEncontrado(false);
       setCepInvalido(false);
+      setEnderecoVeioDoAutoComplete(false);
       cepAtualRef.current = '';
     }
   }, [open, cliente]);
@@ -151,22 +153,25 @@ export default function ModalCliente({
         if (endereco) {
           setFormData(prev => ({
             ...prev,
-            rua: endereco.rua || prev.rua,
-            bairro: endereco.bairro || prev.bairro,
-            cidade: endereco.cidade || prev.cidade,
-            uf: endereco.uf || prev.uf,
-            complemento: endereco.complemento || prev.complemento,
+            rua: endereco.rua || '',
+            bairro: endereco.bairro || '',
+            cidade: endereco.cidade || '',
+            uf: endereco.uf || '',
+            complemento: endereco.complemento || '',
           }));
           setCepEncontrado(true);
           setCepInvalido(false);
+          setEnderecoVeioDoAutoComplete(true);
         } else {
           setCepEncontrado(false);
           setCepInvalido(true);
+          setEnderecoVeioDoAutoComplete(false);
         }
       } catch (err) {
         console.error('Erro ao buscar CEP:', err);
         if (cepAtualRef.current === cepLimpo) {
           setCepInvalido(true);
+          setEnderecoVeioDoAutoComplete(false);
         }
       } finally {
         if (cepAtualRef.current === cepLimpo) {
@@ -180,16 +185,32 @@ export default function ModalCliente({
   const handleCepChange = (value: string) => {
     const numeros = value.replace(/\D/g, '').slice(0, 8);
     const formatted = formatCEP(numeros);
-    setFormData(prev => ({ ...prev, cep: formatted }));
     
     if (numeros.length === 8) {
+      setFormData(prev => ({ ...prev, cep: formatted }));
       buscarEnderecoPorCep(numeros);
     } else {
       cepAtualRef.current = '';
       setCepEncontrado(false);
       setCepInvalido(false);
       setBuscandoCep(false);
+      setEnderecoVeioDoAutoComplete(false);
+      setFormData(prev => ({
+        ...prev,
+        cep: formatted,
+        rua: '',
+        bairro: '',
+        cidade: '',
+        uf: '',
+        complemento: '',
+      }));
     }
+  };
+
+  const handleAddressFieldChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setEnderecoVeioDoAutoComplete(false);
+    setCepEncontrado(false);
   };
 
   const handleCpfCnpjChange = async (value: string) => {
@@ -398,14 +419,14 @@ export default function ModalCliente({
                     {buscandoCep && (
                       <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
                     )}
-                    {cepEncontrado && !buscandoCep && (
+                    {cepEncontrado && enderecoVeioDoAutoComplete && !buscandoCep && (
                       <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
                     )}
                     {cepInvalido && !buscandoCep && (
                       <XCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-destructive" />
                     )}
                   </div>
-                  {cepEncontrado && (
+                  {cepEncontrado && enderecoVeioDoAutoComplete && (
                     <p className="text-xs text-green-600">Endereço encontrado! Campos preenchidos automaticamente.</p>
                   )}
                   {cepInvalido && (
@@ -419,7 +440,7 @@ export default function ModalCliente({
                     <Input
                       id="rua"
                       value={formData.rua}
-                      onChange={(e) => setFormData({ ...formData, rua: e.target.value })}
+                      onChange={(e) => handleAddressFieldChange('rua', e.target.value)}
                       placeholder="Nome da rua"
                       data-testid="input-rua"
                     />
@@ -430,7 +451,7 @@ export default function ModalCliente({
                     <Input
                       id="numero"
                       value={formData.numero}
-                      onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
+                      onChange={(e) => handleAddressFieldChange('numero', e.target.value)}
                       placeholder="123"
                       data-testid="input-numero"
                     />
@@ -443,7 +464,7 @@ export default function ModalCliente({
                     <Input
                       id="complemento"
                       value={formData.complemento}
-                      onChange={(e) => setFormData({ ...formData, complemento: e.target.value })}
+                      onChange={(e) => handleAddressFieldChange('complemento', e.target.value)}
                       placeholder="Apto, Bloco, etc."
                       data-testid="input-complemento"
                     />
@@ -454,7 +475,7 @@ export default function ModalCliente({
                     <Input
                       id="bairro"
                       value={formData.bairro}
-                      onChange={(e) => setFormData({ ...formData, bairro: e.target.value })}
+                      onChange={(e) => handleAddressFieldChange('bairro', e.target.value)}
                       placeholder="Nome do bairro"
                       data-testid="input-bairro"
                     />
@@ -467,7 +488,7 @@ export default function ModalCliente({
                     <Input
                       id="cidade"
                       value={formData.cidade}
-                      onChange={(e) => setFormData({ ...formData, cidade: e.target.value })}
+                      onChange={(e) => handleAddressFieldChange('cidade', e.target.value)}
                       placeholder="Nome da cidade"
                       data-testid="input-cidade"
                     />
@@ -477,7 +498,11 @@ export default function ModalCliente({
                     <Label htmlFor="uf">Estado</Label>
                     <Select 
                       value={formData.uf} 
-                      onValueChange={(value) => setFormData({ ...formData, uf: value })}
+                      onValueChange={(value) => {
+                        setFormData({ ...formData, uf: value });
+                        setEnderecoVeioDoAutoComplete(false);
+                        setCepEncontrado(false);
+                      }}
                     >
                       <SelectTrigger data-testid="select-uf">
                         <SelectValue placeholder="UF" />
