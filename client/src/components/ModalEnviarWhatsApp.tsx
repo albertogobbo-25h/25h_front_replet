@@ -36,6 +36,7 @@ interface ModalEnviarWhatsAppProps {
   };
   dadosCobranca?: Record<string, any>;
   contexto?: string;
+  templatePadrao?: string;
 }
 
 export default function ModalEnviarWhatsApp({
@@ -43,12 +44,14 @@ export default function ModalEnviarWhatsApp({
   onClose,
   destinatario,
   dadosCobranca = {},
-  contexto = 'saas'
+  contexto = 'saas',
+  templatePadrao,
 }: ModalEnviarWhatsAppProps) {
   const { toast } = useToast();
   const { assinanteId } = useAuth();
   const [templateSelecionado, setTemplateSelecionado] = useState<string>("");
   const [previewMessage, setPreviewMessage] = useState<string>("");
+  const [templatePadraoAplicado, setTemplatePadraoAplicado] = useState(false);
 
   const { data: templates, isLoading: loadingTemplates } = useQuery<TemplateWhatsApp[]>({
     queryKey: ['/api/templates-whatsapp'],
@@ -82,6 +85,28 @@ export default function ModalEnviarWhatsApp({
       return [];
     },
   });
+
+  // Selecionar automaticamente o template padrão quando disponível
+  useEffect(() => {
+    if (!open) {
+      // Reset quando o modal fecha
+      setTemplateSelecionado("");
+      setTemplatePadraoAplicado(false);
+      return;
+    }
+
+    if (templates && templates.length > 0 && templatePadrao && !templatePadraoAplicado) {
+      // Buscar template pelo nome (case-insensitive)
+      const templateEncontrado = templates.find(
+        t => t.nome.toLowerCase() === templatePadrao.toLowerCase()
+      );
+      
+      if (templateEncontrado) {
+        setTemplateSelecionado(templateEncontrado.tipo);
+        setTemplatePadraoAplicado(true);
+      }
+    }
+  }, [open, templates, templatePadrao, templatePadraoAplicado]);
 
   const enviarMutation = useMutation({
     mutationFn: async () => {

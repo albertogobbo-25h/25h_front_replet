@@ -520,6 +520,7 @@ export default function Cobrancas() {
             link_pagamento: cobrancaParaWhatsApp.link_pagamento || undefined,
             nome_fantasia: dadosAssinante?.nome_fantasia || '',
           }}
+          templatePadrao="Envio de Cobrança"
         />
       )}
 
