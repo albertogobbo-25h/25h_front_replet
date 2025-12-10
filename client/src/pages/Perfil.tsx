@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6,15 +6,23 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
 import { formatWhatsApp, unformatWhatsApp, formatCNPJ, unformatCPFCNPJ, formatCEP } from "@/lib/masks";
+import { buscarCep } from "@/lib/cep";
 import { callSupabase, ApiError } from "@/lib/api-helper";
 import { useRecebedor } from "@/hooks/useRecebedor";
 import { formatTipoConta } from "@/types/recebedor";
 import ModalConfigContaBancaria from "@/components/ModalConfigContaBancaria";
-import { Loader2, Building2, AlertTriangle, CheckCircle2, Settings } from "lucide-react";
+import { Loader2, Building2, AlertTriangle, CheckCircle2, Settings, XCircle, MapPin } from "lucide-react";
+
+const UF_OPTIONS = [
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
+  'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
+  'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+];
 
 interface DadosAssinante {
   id: string;
@@ -33,9 +41,21 @@ interface DadosAssinante {
   cep: string | null;
 }
 
+function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): T {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  return ((...args: Parameters<T>) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delay);
+  }) as T;
+}
+
 export default function Perfil() {
   const { toast } = useToast();
   const [modalContaAberto, setModalContaAberto] = useState(false);
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const [cepEncontrado, setCepEncontrado] = useState(false);
+  const [cepInvalido, setCepInvalido] = useState(false);
+  const cepAtualRef = useRef<string>('');
   
   const { recebedorAtivo, temRecebedorAtivo, loadingRecebedor, invalidarRecebedor } = useRecebedor();
 
@@ -79,8 +99,61 @@ export default function Perfil() {
         uf: dadosAssinante.uf || '',
         cep: formatCEP(dadosAssinante.cep || ''),
       });
+      if (dadosAssinante.cep && dadosAssinante.cep.length === 8) {
+        setCepEncontrado(true);
+      }
     }
   }, [dadosAssinante]);
+
+  const buscarEnderecoPorCep = useCallback(
+    debounce(async (cep: string) => {
+      const cepLimpo = cep.replace(/\D/g, '');
+      
+      if (cepLimpo.length !== 8) {
+        setCepEncontrado(false);
+        setCepInvalido(false);
+        return;
+      }
+
+      cepAtualRef.current = cepLimpo;
+      setBuscandoCep(true);
+      setCepInvalido(false);
+      
+      try {
+        const endereco = await buscarCep(cepLimpo);
+        
+        if (cepAtualRef.current !== cepLimpo) {
+          return;
+        }
+        
+        if (endereco) {
+          setFormData(prev => ({
+            ...prev,
+            rua: endereco.rua || prev.rua,
+            bairro: endereco.bairro || prev.bairro,
+            cidade: endereco.cidade || prev.cidade,
+            uf: endereco.uf || prev.uf,
+            complemento: endereco.complemento || prev.complemento,
+          }));
+          setCepEncontrado(true);
+          setCepInvalido(false);
+        } else {
+          setCepEncontrado(false);
+          setCepInvalido(true);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar CEP:', err);
+        if (cepAtualRef.current === cepLimpo) {
+          setCepInvalido(true);
+        }
+      } finally {
+        if (cepAtualRef.current === cepLimpo) {
+          setBuscandoCep(false);
+        }
+      }
+    }, 500),
+    []
+  );
 
   const atualizarDadosMutation = useMutation({
     mutationFn: async () => {
@@ -158,7 +231,18 @@ export default function Perfil() {
     } else if (field === 'cnpj') {
       setFormData(prev => ({ ...prev, [field]: formatCNPJ(value) }));
     } else if (field === 'cep') {
-      setFormData(prev => ({ ...prev, [field]: formatCEP(value) }));
+      const numeros = value.replace(/\D/g, '').slice(0, 8);
+      const formatted = formatCEP(numeros);
+      setFormData(prev => ({ ...prev, cep: formatted }));
+      
+      if (numeros.length === 8) {
+        buscarEnderecoPorCep(numeros);
+      } else {
+        cepAtualRef.current = '';
+        setCepEncontrado(false);
+        setCepInvalido(false);
+        setBuscandoCep(false);
+      }
     } else {
       setFormData(prev => ({ ...prev, [field]: value }));
     }
@@ -247,10 +331,41 @@ export default function Perfil() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Endereço</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              Endereço
+            </CardTitle>
             <CardDescription>Informações de endereço (opcional)</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="cep">CEP</Label>
+              <div className="relative max-w-xs">
+                <Input
+                  id="cep"
+                  value={formData.cep}
+                  onChange={(e) => handleChange('cep', e.target.value)}
+                  placeholder="00000-000"
+                  data-testid="input-cep"
+                />
+                {buscandoCep && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+                {cepEncontrado && !buscandoCep && (
+                  <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
+                )}
+                {cepInvalido && !buscandoCep && (
+                  <XCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-destructive" />
+                )}
+              </div>
+              {cepEncontrado && (
+                <p className="text-xs text-green-600">Endereço encontrado! Campos preenchidos automaticamente.</p>
+              )}
+              {cepInvalido && (
+                <p className="text-xs text-destructive">CEP não encontrado. Verifique o número ou preencha manualmente.</p>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="rua">Rua</Label>
@@ -303,22 +418,19 @@ export default function Perfil() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="uf">UF</Label>
-                <Input
-                  id="uf"
-                  maxLength={2}
+                <Select
                   value={formData.uf}
-                  onChange={(e) => handleChange('uf', e.target.value.toUpperCase())}
-                  data-testid="input-uf"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="cep">CEP</Label>
-                <Input
-                  id="cep"
-                  value={formData.cep}
-                  onChange={(e) => handleChange('cep', e.target.value)}
-                  data-testid="input-cep"
-                />
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, uf: value }))}
+                >
+                  <SelectTrigger data-testid="select-uf">
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {UF_OPTIONS.map((uf) => (
+                      <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardContent>

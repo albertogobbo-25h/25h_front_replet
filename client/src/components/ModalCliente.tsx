@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -15,8 +15,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatWhatsApp, unformatWhatsApp, formatCPFCNPJ, unformatCPFCNPJ, formatCEP } from "@/lib/masks";
+import { buscarCep } from "@/lib/cep";
 import { useCriarCliente, useAtualizarCliente, useBuscarClientePorCpfCnpj } from "@/hooks/useClientes";
-import { Loader2, AlertTriangle } from "lucide-react";
+import { Loader2, AlertTriangle, CheckCircle2, XCircle, MapPin } from "lucide-react";
 import type { Cliente, TipoPessoa } from "@/types/cliente";
 
 interface ModalClienteProps {
@@ -66,6 +67,14 @@ const INITIAL_FORM_DATA: FormData = {
   observacao: '',
 };
 
+function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): T {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  return ((...args: Parameters<T>) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delay);
+  }) as T;
+}
+
 export default function ModalCliente({
   open,
   onClose,
@@ -74,6 +83,10 @@ export default function ModalCliente({
 }: ModalClienteProps) {
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM_DATA);
   const [cpfCnpjDuplicado, setCpfCnpjDuplicado] = useState<{ encontrado: boolean; clienteId?: string } | null>(null);
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const [cepEncontrado, setCepEncontrado] = useState(false);
+  const [cepInvalido, setCepInvalido] = useState(false);
+  const cepAtualRef = useRef<string>('');
 
   const isEdit = !!cliente;
 
@@ -102,11 +115,82 @@ export default function ModalCliente({
         observacao: cliente.observacao || '',
       });
       setCpfCnpjDuplicado(null);
+      if (cliente.cep && cliente.cep.length === 8) {
+        setCepEncontrado(true);
+      }
     } else if (open && !cliente) {
       setFormData(INITIAL_FORM_DATA);
       setCpfCnpjDuplicado(null);
+      setCepEncontrado(false);
+      setCepInvalido(false);
+      cepAtualRef.current = '';
     }
   }, [open, cliente]);
+
+  const buscarEnderecoPorCep = useCallback(
+    debounce(async (cep: string) => {
+      const cepLimpo = cep.replace(/\D/g, '');
+      
+      if (cepLimpo.length !== 8) {
+        setCepEncontrado(false);
+        setCepInvalido(false);
+        return;
+      }
+
+      cepAtualRef.current = cepLimpo;
+      setBuscandoCep(true);
+      setCepInvalido(false);
+      
+      try {
+        const endereco = await buscarCep(cepLimpo);
+        
+        if (cepAtualRef.current !== cepLimpo) {
+          return;
+        }
+        
+        if (endereco) {
+          setFormData(prev => ({
+            ...prev,
+            rua: endereco.rua || prev.rua,
+            bairro: endereco.bairro || prev.bairro,
+            cidade: endereco.cidade || prev.cidade,
+            uf: endereco.uf || prev.uf,
+            complemento: endereco.complemento || prev.complemento,
+          }));
+          setCepEncontrado(true);
+          setCepInvalido(false);
+        } else {
+          setCepEncontrado(false);
+          setCepInvalido(true);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar CEP:', err);
+        if (cepAtualRef.current === cepLimpo) {
+          setCepInvalido(true);
+        }
+      } finally {
+        if (cepAtualRef.current === cepLimpo) {
+          setBuscandoCep(false);
+        }
+      }
+    }, 500),
+    []
+  );
+
+  const handleCepChange = (value: string) => {
+    const numeros = value.replace(/\D/g, '').slice(0, 8);
+    const formatted = formatCEP(numeros);
+    setFormData(prev => ({ ...prev, cep: formatted }));
+    
+    if (numeros.length === 8) {
+      buscarEnderecoPorCep(numeros);
+    } else {
+      cepAtualRef.current = '';
+      setCepEncontrado(false);
+      setCepInvalido(false);
+      setBuscandoCep(false);
+    }
+  };
 
   const handleCpfCnpjChange = async (value: string) => {
     const formatted = formatCPFCNPJ(value);
@@ -295,8 +379,40 @@ export default function ModalCliente({
               </div>
 
               <div className="space-y-4">
-                <h3 className="text-sm font-medium text-muted-foreground">Endereço</h3>
+                <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  Endereço
+                </h3>
                 
+                <div className="space-y-2">
+                  <Label htmlFor="cep">CEP</Label>
+                  <div className="relative max-w-xs">
+                    <Input
+                      id="cep"
+                      value={formData.cep}
+                      onChange={(e) => handleCepChange(e.target.value)}
+                      placeholder="00000-000"
+                      maxLength={9}
+                      data-testid="input-cep"
+                    />
+                    {buscandoCep && (
+                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                    )}
+                    {cepEncontrado && !buscandoCep && (
+                      <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
+                    )}
+                    {cepInvalido && !buscandoCep && (
+                      <XCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-destructive" />
+                    )}
+                  </div>
+                  {cepEncontrado && (
+                    <p className="text-xs text-green-600">Endereço encontrado! Campos preenchidos automaticamente.</p>
+                  )}
+                  {cepInvalido && (
+                    <p className="text-xs text-destructive">CEP não encontrado. Verifique o número ou preencha manualmente.</p>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2 md:col-span-2">
                     <Label htmlFor="rua">Rua</Label>
@@ -372,18 +488,6 @@ export default function ModalCliente({
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="cep">CEP</Label>
-                    <Input
-                      id="cep"
-                      value={formData.cep}
-                      onChange={(e) => setFormData({ ...formData, cep: formatCEP(e.target.value) })}
-                      placeholder="00000-000"
-                      maxLength={9}
-                      data-testid="input-cep"
-                    />
                   </div>
                 </div>
               </div>
