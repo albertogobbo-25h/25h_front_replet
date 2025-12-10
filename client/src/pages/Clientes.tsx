@@ -3,6 +3,7 @@ import ClienteTable from "@/components/ClienteTable";
 import ModalCliente from "@/components/ModalCliente";
 import ModalConfigContaBancaria from "@/components/ModalConfigContaBancaria";
 import ModalDadosCadastrais from "@/components/ModalDadosCadastrais";
+import ModalEnviarWhatsApp from "@/components/ModalEnviarWhatsApp";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,13 +12,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Search, Loader2, AlertTriangle, Building2, FileText } from "lucide-react";
 import { useValidarRecebedor } from "@/hooks/useValidarRecebedor";
 import { useListarClientes, useAtivarCliente, useDesativarCliente } from "@/hooks/useClientes";
+import { useToast } from "@/hooks/use-toast";
 import type { Cliente } from "@/types/cliente";
 
 export default function Clientes() {
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("todos");
   const [modalOpen, setModalOpen] = useState(false);
   const [clienteParaEditar, setClienteParaEditar] = useState<Cliente | null>(null);
+  const [modalWhatsAppOpen, setModalWhatsAppOpen] = useState(false);
+  const [clienteParaWhatsApp, setClienteParaWhatsApp] = useState<Cliente | null>(null);
 
   const {
     temRecebedorAtivo,
@@ -72,6 +77,19 @@ export default function Clientes() {
     }
   };
 
+  const handleEnviarWhatsApp = (cliente: Cliente) => {
+    if (!cliente.whatsapp) {
+      toast({
+        title: "WhatsApp não cadastrado",
+        description: "Este cliente não possui número de WhatsApp cadastrado.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setClienteParaWhatsApp(cliente);
+    setModalWhatsAppOpen(true);
+  };
+
   const handleModalSuccess = () => {
     setModalOpen(false);
   };
@@ -79,6 +97,11 @@ export default function Clientes() {
   const handleModalClose = () => {
     setModalOpen(false);
     setClienteParaEditar(null);
+  };
+
+  const handleModalWhatsAppClose = () => {
+    setModalWhatsAppOpen(false);
+    setClienteParaWhatsApp(null);
   };
 
   return (
@@ -201,6 +224,7 @@ export default function Clientes() {
               clientes={clientes}
               onEditar={handleEditarCliente}
               onToggleStatus={handleToggleStatus}
+              onEnviarWhatsApp={handleEnviarWhatsApp}
             />
           )}
         </CardContent>
@@ -227,6 +251,17 @@ export default function Clientes() {
         titulo="Configure sua Conta Bancária"
         descricao="Para cadastrar clientes, você precisa primeiro configurar sua conta bancária para recebimento."
       />
+
+      {clienteParaWhatsApp && (
+        <ModalEnviarWhatsApp
+          open={modalWhatsAppOpen}
+          onClose={handleModalWhatsAppClose}
+          destinatario={{
+            nome: clienteParaWhatsApp.nome_visualizacao || clienteParaWhatsApp.nome,
+            whatsapp: clienteParaWhatsApp.whatsapp || '',
+          }}
+        />
+      )}
     </div>
   );
 }

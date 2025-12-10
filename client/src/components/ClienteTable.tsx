@@ -1,7 +1,7 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Power, Phone, Mail, User } from "lucide-react";
+import { Edit, Power, Phone, Mail, User, Send } from "lucide-react";
 import { formatWhatsApp, formatCPFCNPJ } from "@/lib/masks";
 import type { Cliente } from "@/types/cliente";
 
@@ -9,9 +9,10 @@ interface ClienteTableProps {
   clientes: Cliente[];
   onEditar?: (cliente: Cliente) => void;
   onToggleStatus?: (cliente: Cliente) => void;
+  onEnviarWhatsApp?: (cliente: Cliente) => void;
 }
 
-export default function ClienteTable({ clientes, onEditar, onToggleStatus }: ClienteTableProps) {
+export default function ClienteTable({ clientes, onEditar, onToggleStatus, onEnviarWhatsApp }: ClienteTableProps) {
   return (
     <div className="border rounded-md">
       <Table>
@@ -70,7 +71,18 @@ export default function ClienteTable({ clientes, onEditar, onToggleStatus }: Cli
                 </Badge>
               </TableCell>
               <TableCell className="text-right">
-                <div className="flex justify-end gap-2">
+                <div className="flex justify-end gap-1">
+                  {cliente.whatsapp && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onEnviarWhatsApp?.(cliente)}
+                      data-testid={`button-send-cliente-${cliente.id}`}
+                      title="Enviar WhatsApp"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"

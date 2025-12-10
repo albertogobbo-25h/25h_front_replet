@@ -29,7 +29,7 @@ I prefer simple language and clear, concise explanations. I want iterative devel
 ### Feature Specifications
 - **Authentication**: Login/Signup, onboarding, automatic Free plan, session management, route protection, role-based access control (ADMIN, PROFISSIONAL, CLIENTE).
 - **Dashboard**: Real data integration via `useDashboard` hook. KPI cards show: Faturamento Mensal/Anual (sum of PAGO charges), Clientes Ativos/Inativos (from `listar_clientes`), Cobranças Geradas (current month total). Includes trend indicators (% variation vs previous period) and recent charges table. Loading/skeleton states and error handling.
-- **Client Management**: Complete CRUD via Supabase RPCs, including validation and filtering.
+- **Client Management**: Complete CRUD via Supabase RPCs, including validation, filtering, and WhatsApp message sending via template selection modal (Send button in actions column).
 - **Client Plans Management**: CRUD for service plans (VALOR_FIXO, PACOTE, VALOR_VARIAVEL).
 - **Client Subscriptions Management**: Complete CRUD for client subscriptions via Supabase RPCs. Includes listing with filters, create new subscription with client/plan selection (ModalNovaAssinatura), suspend, cancel, and reactivate actions. Handles API envelope pattern (OK/WARNING/ERROR) with duplicate subscription detection (ASSINATURA_DUPLICADA warning).
 - **Charge Management**: Complete CRUD for charges via Supabase RPCs, including standalone or linked to subscriptions, dynamic statuses, comprehensive filters, and actions (send via WhatsApp, mark paid, cancel, generate payment link).
