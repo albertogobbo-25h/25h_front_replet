@@ -133,8 +133,27 @@ export default function Cobrancas() {
     setDetalhesOpen(true);
   };
 
-  const handleEnviarWhatsApp = (cobranca: Cobranca) => {
-    setCobrancaParaWhatsApp(cobranca);
+  const handleEnviarWhatsApp = async (cobranca: Cobranca) => {
+    // Se não tem link de pagamento, gerar antes de abrir o modal
+    if (!cobranca.link_pagamento) {
+      try {
+        const result = await gerarLinkMutation.mutateAsync(cobranca.id);
+        // Atualizar a cobrança com o link gerado
+        setCobrancaParaWhatsApp({
+          ...cobranca,
+          link_pagamento: result.link_pagamento,
+        });
+      } catch (error) {
+        toast({
+          title: 'Erro ao gerar link',
+          description: 'Não foi possível gerar o link de pagamento.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    } else {
+      setCobrancaParaWhatsApp(cobranca);
+    }
     setModalWhatsAppOpen(true);
   };
 
@@ -499,6 +518,7 @@ export default function Cobrancas() {
             valor: formatCurrency(Number(cobrancaParaWhatsApp.valor_total)),
             vencimento: formatDate(cobrancaParaWhatsApp.data_vencimento),
             link_pagamento: cobrancaParaWhatsApp.link_pagamento || undefined,
+            nome_fantasia: dadosAssinante?.nome_fantasia || '',
           }}
         />
       )}
