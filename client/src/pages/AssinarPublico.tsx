@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
+import { buscarCep } from "@/lib/cep";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, CheckCircle2, XCircle, AlertCircle, User, Building2 } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, AlertCircle, User, Building2, MapPin } from "lucide-react";
 import { formatCurrency, formatWhatsApp, formatCPF, formatCNPJ, formatCEP } from "@/lib/masks";
 import type {
   PlanoPublico,
@@ -45,7 +46,14 @@ const ERROR_MESSAGES: Record<string, string> = {
   'PLANO_INATIVO': 'Este plano foi desativado.',
   'PLANO_SEM_VALOR': 'Este plano não tem valor configurado.',
   'ASSINANTE_NAO_ENCONTRADO': 'Assinante não encontrado.',
+  'ENDERECO_OBRIGATORIO': 'Para planos pagos, é necessário informar o endereço completo.',
 };
+
+const UF_OPTIONS = [
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
+  'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
+  'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+];
 
 function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): T {
   let timeoutId: ReturnType<typeof setTimeout>;
@@ -71,6 +79,9 @@ export default function AssinarPublico() {
   const [erroSubmit, setErroSubmit] = useState<string | null>(null);
   const [processando, setProcessando] = useState(false);
   const [buscandoCliente, setBuscandoCliente] = useState(false);
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const [cepEncontrado, setCepEncontrado] = useState(false);
+  const [cepInvalido, setCepInvalido] = useState(false);
   const [clienteEncontrado, setClienteEncontrado] = useState(false);
   const [showDuplicadoDialog, setShowDuplicadoDialog] = useState(false);
   const [sucesso, setSucesso] = useState(false);
@@ -90,6 +101,8 @@ export default function AssinarPublico() {
     uf: '',
     cep: '',
   });
+
+  const isPlanoPago = (plano?.valor_mensal || 0) > 0;
 
   useEffect(() => {
     async function carregarPlano() {
@@ -176,6 +189,9 @@ export default function AssinarPublico() {
             cep: cliente.cep || prev.cep,
           }));
           setClienteEncontrado(true);
+          if (cliente.cep) {
+            setCepEncontrado(true);
+          }
         } else {
           setClienteEncontrado(false);
         }
@@ -186,6 +202,47 @@ export default function AssinarPublico() {
       }
     }, 500),
     [assinante?.id]
+  );
+
+  const buscarEnderecoPorCep = useCallback(
+    debounce(async (cep: string) => {
+      const cepLimpo = cep.replace(/\D/g, '');
+      
+      if (cepLimpo.length !== 8) {
+        setCepEncontrado(false);
+        setCepInvalido(false);
+        return;
+      }
+
+      setBuscandoCep(true);
+      setCepInvalido(false);
+      
+      try {
+        const endereco = await buscarCep(cepLimpo);
+        
+        if (endereco) {
+          setFormData(prev => ({
+            ...prev,
+            rua: endereco.rua || prev.rua,
+            bairro: endereco.bairro || prev.bairro,
+            cidade: endereco.cidade || prev.cidade,
+            uf: endereco.uf || prev.uf,
+            complemento: endereco.complemento || prev.complemento,
+          }));
+          setCepEncontrado(true);
+          setCepInvalido(false);
+        } else {
+          setCepEncontrado(false);
+          setCepInvalido(true);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar CEP:', err);
+        setCepInvalido(true);
+      } finally {
+        setBuscandoCep(false);
+      }
+    }, 500),
+    []
   );
 
   const handleCpfCnpjChange = (value: string) => {
@@ -210,11 +267,40 @@ export default function AssinarPublico() {
 
   const handleCepChange = (value: string) => {
     const numeros = value.replace(/\D/g, '').slice(0, 8);
-    setFormData(prev => ({ ...prev, cep: formatCEP(numeros) }));
+    const formatted = formatCEP(numeros);
+    setFormData(prev => ({ ...prev, cep: formatted }));
+    
+    if (numeros.length === 8) {
+      buscarEnderecoPorCep(numeros);
+    } else {
+      setCepEncontrado(false);
+      setCepInvalido(false);
+    }
+  };
+
+  const validarEndereco = (): boolean => {
+    if (!isPlanoPago) return true;
+
+    const { cep, rua, numero, bairro, cidade, uf } = formData;
+    const cepLimpo = cep?.replace(/\D/g, '') || '';
+    
+    return (
+      cepLimpo.length === 8 &&
+      (rua?.trim() || '').length > 0 &&
+      (numero?.trim() || '').length > 0 &&
+      (bairro?.trim() || '').length > 0 &&
+      (cidade?.trim() || '').length > 0 &&
+      (uf?.trim() || '').length === 2
+    );
   };
 
   const criarAssinatura = async (confirmarDuplicacao: boolean = false) => {
     if (!planoId) return;
+
+    if (isPlanoPago && !validarEndereco()) {
+      setErroSubmit('Para planos pagos, é necessário informar o endereço completo (CEP, rua, número, bairro, cidade e UF).');
+      return;
+    }
 
     setProcessando(true);
     setErroSubmit(null);
@@ -474,37 +560,78 @@ export default function AssinarPublico() {
                 </div>
 
                 <div className="border-t pt-6">
-                  <p className="text-sm font-medium mb-4">Endereço (opcional)</p>
+                  <div className="flex items-center gap-2 mb-4">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-sm font-medium">
+                      Endereço {isPlanoPago ? <span className="text-destructive">*</span> : '(opcional)'}
+                    </p>
+                  </div>
+                  
+                  {isPlanoPago && (
+                    <Alert className="mb-4">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Para planos pagos, o endereço completo é obrigatório.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="cep">CEP</Label>
-                      <Input
-                        id="cep"
-                        value={formData.cep}
-                        onChange={(e) => handleCepChange(e.target.value)}
-                        placeholder="00000-000"
-                        data-testid="input-cep"
-                      />
+                    <div className="md:col-span-2">
+                      <Label htmlFor="cep">
+                        CEP {isPlanoPago && <span className="text-destructive">*</span>}
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          id="cep"
+                          value={formData.cep}
+                          onChange={(e) => handleCepChange(e.target.value)}
+                          placeholder="00000-000"
+                          required={isPlanoPago}
+                          data-testid="input-cep"
+                        />
+                        {buscandoCep && (
+                          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                        {cepEncontrado && !buscandoCep && (
+                          <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
+                        )}
+                        {cepInvalido && !buscandoCep && (
+                          <XCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-destructive" />
+                        )}
+                      </div>
+                      {cepEncontrado && (
+                        <p className="text-xs text-green-600 mt-1">Endereço encontrado! Campos preenchidos automaticamente.</p>
+                      )}
+                      {cepInvalido && (
+                        <p className="text-xs text-destructive mt-1">CEP não encontrado. Verifique o número ou preencha manualmente.</p>
+                      )}
                     </div>
 
                     <div className="md:col-span-2">
-                      <Label htmlFor="rua">Rua</Label>
+                      <Label htmlFor="rua">
+                        Rua {isPlanoPago && <span className="text-destructive">*</span>}
+                      </Label>
                       <Input
                         id="rua"
                         value={formData.rua}
                         onChange={(e) => setFormData(prev => ({ ...prev, rua: e.target.value }))}
                         placeholder="Nome da rua"
+                        required={isPlanoPago}
                         data-testid="input-rua"
                       />
                     </div>
 
                     <div>
-                      <Label htmlFor="numero">Número</Label>
+                      <Label htmlFor="numero">
+                        Número {isPlanoPago && <span className="text-destructive">*</span>}
+                      </Label>
                       <Input
                         id="numero"
                         value={formData.numero}
                         onChange={(e) => setFormData(prev => ({ ...prev, numero: e.target.value }))}
                         placeholder="123"
+                        required={isPlanoPago}
                         data-testid="input-numero"
                       />
                     </div>
@@ -521,37 +648,52 @@ export default function AssinarPublico() {
                     </div>
 
                     <div>
-                      <Label htmlFor="bairro">Bairro</Label>
+                      <Label htmlFor="bairro">
+                        Bairro {isPlanoPago && <span className="text-destructive">*</span>}
+                      </Label>
                       <Input
                         id="bairro"
                         value={formData.bairro}
                         onChange={(e) => setFormData(prev => ({ ...prev, bairro: e.target.value }))}
                         placeholder="Nome do bairro"
+                        required={isPlanoPago}
                         data-testid="input-bairro"
                       />
                     </div>
 
                     <div>
-                      <Label htmlFor="cidade">Cidade</Label>
+                      <Label htmlFor="cidade">
+                        Cidade {isPlanoPago && <span className="text-destructive">*</span>}
+                      </Label>
                       <Input
                         id="cidade"
                         value={formData.cidade}
                         onChange={(e) => setFormData(prev => ({ ...prev, cidade: e.target.value }))}
                         placeholder="Nome da cidade"
+                        required={isPlanoPago}
                         data-testid="input-cidade"
                       />
                     </div>
 
                     <div>
-                      <Label htmlFor="uf">UF</Label>
-                      <Input
-                        id="uf"
+                      <Label htmlFor="uf">
+                        UF {isPlanoPago && <span className="text-destructive">*</span>}
+                      </Label>
+                      <Select
                         value={formData.uf}
-                        onChange={(e) => setFormData(prev => ({ ...prev, uf: e.target.value.toUpperCase().slice(0, 2) }))}
-                        placeholder="SP"
-                        maxLength={2}
-                        data-testid="input-uf"
-                      />
+                        onValueChange={(value) => setFormData(prev => ({ ...prev, uf: value }))}
+                      >
+                        <SelectTrigger data-testid="select-uf">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {UF_OPTIONS.map((uf) => (
+                            <SelectItem key={uf} value={uf}>
+                              {uf}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
